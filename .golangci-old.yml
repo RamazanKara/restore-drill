@@ -1,11 +1,18 @@
-version: 2
+run:
+  timeout: 5m
+  go: "1.25"
+
 linters:
   enable:
     - errcheck
     - govet
     - staticcheck
     - unused
+    - gosimple
     - ineffassign
+    - typecheck
+    - gofmt
+    - goimports
     - misspell
     - unconvert
     - bodyclose
@@ -34,6 +41,3 @@ issues:
       text: "G304"
     - linters: [gosec]
       text: "G115"
-run:
-  timeout: 5m
-  go: "1.25"

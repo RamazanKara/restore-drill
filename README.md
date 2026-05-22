@@ -56,8 +56,20 @@ go install github.com/fluentorbit/restore-drill/cmd/restore-drill@latest
 # Run a drill against your PostgreSQL backup
 restore-drill run --config drill.yaml
 
+# Run in parallel with JSON output
+restore-drill run --config drill.yaml --parallel --format json
+
+# Incident mode: restore to a specific point-in-time and keep container running
+restore-drill run --config drill.yaml --target "2024-01-15T10:30:00Z" --no-cleanup
+
 # Check last drill results
 restore-drill status
+
+# Generate compliance report (HTML)
+restore-drill report --last 90 --output compliance-q2.html
+
+# Generate compliance report (JSON, for automation)
+restore-drill report --format json --last 30
 ```
 
 ### Kubernetes CronJob
@@ -215,17 +227,18 @@ groups:
 Generate audit-ready reports:
 
 ```bash
-restore-drill report --format html --last 90d --output compliance-q2.html
+restore-drill report --last 90 --output compliance-q2.html
 ```
 
 The report includes:
+- Executive summary with success rate, avg/max RTO
 - Drill execution history with timestamps
 - RTO measurements per drill
 - RPO measurements (backup freshness at time of test)
 - Pass/fail status for each validation check
-- Trend charts (RTO over time)
+- Compliance control mapping
 
-Suitable for: NIS2 Art. 21, ISO 27001 A.12.3, BSI C5 OPS-04.
+Mapped controls: ISO 27001:2022 A.8.13, NIS2 Art. 21(2)(c), BSI C5 OPS-04/OPS-05, SOC 2 A1.2.
 
 ## Architecture
 
