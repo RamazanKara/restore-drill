@@ -7,7 +7,7 @@ type DrillConfig struct {
 	Schedule string       `yaml:"schedule"`
 	Backup   BackupConfig `yaml:"backup"`
 	Restore  RestoreSpec  `yaml:"restore"`
-	Validate []Check      `yaml:"validate"`
+	Validate []Check      `yaml:"checks"`
 	Alerts   []AlertSpec  `yaml:"alerts"`
 }
 
@@ -37,8 +37,9 @@ type RestoreSpec struct {
 
 // ContainerConf defines the ephemeral container spec.
 type ContainerConf struct {
-	Image     string       `yaml:"image"`
-	Resources ResourceConf `yaml:"resources"`
+	Image     string            `yaml:"image"`
+	Env       map[string]string `yaml:"env,omitempty"`
+	Resources ResourceConf      `yaml:"resources"`
 }
 
 // ResourceConf defines container resource limits.

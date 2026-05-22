@@ -20,7 +20,7 @@ drills:
           memory: 2Gi
           cpu: "1"
       timeout: 30m
-    validate:
+    checks:
       - name: users-exist
         type: query
         sql: "SELECT count(*) FROM users"

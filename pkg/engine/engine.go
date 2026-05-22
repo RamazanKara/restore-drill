@@ -37,6 +37,7 @@ type Engine struct {
 	runtime   Runtime
 	reporter  Reporter
 	providers map[string]Provider
+	noCleanup bool
 }
 
 // New creates a new drill engine.
@@ -46,6 +47,11 @@ func New(runtime Runtime, reporter Reporter) *Engine {
 		reporter:  reporter,
 		providers: make(map[string]Provider),
 	}
+}
+
+// SetNoCleanup configures whether containers are kept after drills.
+func (e *Engine) SetNoCleanup(v bool) {
+	e.noCleanup = v
 }
 
 // RegisterProvider adds a provider to the engine's registry.
@@ -115,9 +121,13 @@ func (e *Engine) executeDrill(ctx context.Context, drill DrillConfig) DrillResul
 	}
 
 	// Build container spec
+	env := make(map[string]string)
+	for k, v := range drill.Restore.Container.Env {
+		env[k] = v
+	}
 	spec := ContainerSpec{
 		Image: drill.Restore.Container.Image,
-		Env:   make(map[string]string),
+		Env:   env,
 		Ports: GetDefaultPorts(drill.Provider),
 	}
 	if drill.Restore.Container.Resources.Memory != "" {
@@ -133,6 +143,10 @@ func (e *Engine) executeDrill(ctx context.Context, drill DrillConfig) DrillResul
 		return result
 	}
 	defer func() {
+		if e.noCleanup {
+			slog.Info("keeping container (--no-cleanup)", "id", container.ID())
+			return
+		}
 		slog.Info("destroying container", "id", container.ID())
 		if err := e.runtime.Destroy(ctx, container); err != nil {
 			slog.Error("failed to destroy container", "id", container.ID(), "error", err)

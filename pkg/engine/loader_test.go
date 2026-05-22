@@ -17,7 +17,7 @@ drills:
     restore:
       container:
         image: postgres:16
-    validate:
+    checks:
       - name: row_count
         type: query
         sql: "SELECT count(*) FROM users"
@@ -52,7 +52,7 @@ drills:
     restore:
       container:
         image: postgres:16
-    validate:
+    checks:
       - name: check
         type: query
         sql: "SELECT 1"
@@ -80,7 +80,7 @@ drills:
     restore:
       container:
         image: postgres:16
-    validate:
+    checks:
       - name: check
         type: query
         sql: "SELECT 1"
@@ -212,7 +212,7 @@ drills:
     restore:
       container:
         image: postgres:16
-    validate:
+    checks:
       - name: check1
         type: query
         sql: "SELECT 1"

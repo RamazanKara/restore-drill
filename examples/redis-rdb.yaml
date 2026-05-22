@@ -18,7 +18,7 @@ drills:
           memory: 512Mi
           cpu: "500m"
       timeout: 5m
-    validate:
+    checks:
       - name: key-count
         type: key_count
         expect: "> 1000"

@@ -4,8 +4,11 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"text/tabwriter"
+	"time"
 
 	"github.com/fluentorbit/restore-drill/internal/logging"
+	"github.com/fluentorbit/restore-drill/internal/state"
 	"github.com/fluentorbit/restore-drill/internal/version"
 	"github.com/fluentorbit/restore-drill/pkg/engine"
 	"github.com/fluentorbit/restore-drill/pkg/metrics"
@@ -46,6 +49,7 @@ func runCmd() *cobra.Command {
 	var configPath string
 	var format string
 	var parallel bool
+	var noCleanup bool
 
 	cmd := &cobra.Command{
 		Use:   "run",
@@ -70,6 +74,9 @@ func runCmd() *cobra.Command {
 			}
 
 			eng := engine.New(rt, rep)
+			if noCleanup {
+				eng.SetNoCleanup(true)
+			}
 
 			// Register providers
 			eng.RegisterProvider(postgres.New())
@@ -85,6 +92,9 @@ func runCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+
+			// Save state for 'status' command
+			saveState(results)
 
 			// Push metrics if configured
 			if cfg.Metrics.Prometheus.Enabled && cfg.Metrics.Prometheus.Pushgateway != "" {
@@ -106,8 +116,50 @@ func runCmd() *cobra.Command {
 	cmd.Flags().StringVarP(&configPath, "config", "c", "drill.yaml", "Path to drill configuration file")
 	cmd.Flags().StringVar(&format, "format", "table", "Output format: table, json")
 	cmd.Flags().BoolVar(&parallel, "parallel", false, "Run drills concurrently")
+	cmd.Flags().BoolVar(&noCleanup, "no-cleanup", false, "Keep containers running after drill (for debugging)")
 
 	return cmd
+}
+
+func saveState(results []engine.DrillResult) {
+	run := &state.LastRun{
+		Timestamp: time.Now(),
+		Results:   make([]state.RunResult, 0, len(results)),
+	}
+	for _, r := range results {
+		sr := state.RunResult{
+			Name:             r.Name,
+			Provider:         r.Provider,
+			StartedAt:        r.StartedAt,
+			Duration:         r.Duration.String(),
+			BackupTimestamp:  r.BackupTimestamp,
+			ValidationPassed: r.ValidationPassed,
+		}
+		if r.Error != nil {
+			sr.Error = r.Error.Error()
+		}
+		if !r.BackupTimestamp.IsZero() {
+			sr.BackupAge = r.BackupAge.Truncate(time.Second).String()
+		}
+		for _, c := range r.Checks {
+			sc := state.CheckResult{
+				Name:     c.Name,
+				Type:     c.Type,
+				Expected: c.Expected,
+				Actual:   c.Actual,
+				Passed:   c.Passed,
+			}
+			if c.Error != nil {
+				sc.Error = c.Error.Error()
+			}
+			sr.Checks = append(sr.Checks, sc)
+		}
+		run.Results = append(run.Results, sr)
+	}
+
+	if err := state.Save(state.DefaultPath(), run); err != nil {
+		slog.Warn("failed to save state", "error", err)
+	}
 }
 
 func statusCmd() *cobra.Command {
@@ -115,7 +167,30 @@ func statusCmd() *cobra.Command {
 		Use:   "status",
 		Short: "Show last drill results",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Println("restore-drill status: not yet implemented")
+			run, err := state.Load(state.DefaultPath())
+			if err != nil {
+				return fmt.Errorf("no previous run found: %w", err)
+			}
+
+			fmt.Printf("Last run: %s\n\n", run.Timestamp.Format(time.RFC3339))
+
+			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+			fmt.Fprintln(w, "DRILL\tPROVIDER\tSTATUS\tDURATION\tCHECKS")
+			for _, r := range run.Results {
+				status := "PASS"
+				if !r.ValidationPassed || r.Error != "" {
+					status = "FAIL"
+				}
+				passed := 0
+				for _, c := range r.Checks {
+					if c.Passed {
+						passed++
+					}
+				}
+				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%d/%d\n",
+					r.Name, r.Provider, status, r.Duration, passed, len(r.Checks))
+			}
+			w.Flush()
 			return nil
 		},
 	}

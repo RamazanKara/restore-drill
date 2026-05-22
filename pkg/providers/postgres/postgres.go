@@ -2,9 +2,13 @@
 package postgres
 
 import (
+	"archive/tar"
+	"bytes"
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -53,7 +57,7 @@ func (p *Provider) Validate(ctx context.Context, rt engine.Runtime, target engin
 		var err error
 
 		switch check.Type {
-		case "query", "row_count":
+		case "query", "sql", "row_count":
 			actual, err = p.execSQL(ctx, rt, target, check.SQL)
 		case "schema":
 			actual, err = p.execSQL(ctx, rt, target, check.SQL)
@@ -163,27 +167,52 @@ func (p *Provider) restorePgBackRest(ctx context.Context, rt engine.Runtime, cfg
 }
 
 func (p *Provider) restorePgDump(ctx context.Context, rt engine.Runtime, cfg engine.BackupConfig, target engine.Container, start time.Time) (*engine.RestoreResult, error) {
-	slog.Info("restoring via pg_restore", "source", cfg.Source)
+	slog.Info("restoring via pg_dump", "source", cfg.Source)
 
 	// Wait for PostgreSQL to be ready
 	if err := p.waitReady(ctx, rt, target); err != nil {
 		return nil, err
 	}
 
-	// pg_restore from the backup file (assumes backup file is already in container or accessible)
-	cmd := []string{"pg_restore", "-U", "postgres", "-d", "postgres", "--no-owner", "--no-acl"}
+	// Copy the dump file into the container
+	destPath := "/tmp/restore.sql"
 	if cfg.Source != "" {
-		cmd = append(cmd, cfg.Source)
+		data, err := os.ReadFile(cfg.Source)
+		if err != nil {
+			return nil, fmt.Errorf("read source file %s: %w", cfg.Source, err)
+		}
+
+		// Create a tar archive containing the file (Docker CopyTo expects tar)
+		var buf bytes.Buffer
+		tw := tar.NewWriter(&buf)
+		hdr := &tar.Header{
+			Name: filepath.Base(destPath),
+			Mode: 0644,
+			Size: int64(len(data)),
+		}
+		if err := tw.WriteHeader(hdr); err != nil {
+			return nil, fmt.Errorf("tar header: %w", err)
+		}
+		if _, err := tw.Write(data); err != nil {
+			return nil, fmt.Errorf("tar write: %w", err)
+		}
+		tw.Close()
+
+		if err := rt.CopyTo(ctx, target, "/tmp/", &buf); err != nil {
+			return nil, fmt.Errorf("copy dump to container: %w", err)
+		}
 	}
 
+	// Use psql for plain SQL dumps
+	cmd := []string{"psql", "-U", "postgres", "-f", destPath}
 	out, err := rt.Exec(ctx, target, cmd)
 	if err != nil {
-		// pg_restore exits non-zero on warnings; check if it's fatal
-		if !strings.Contains(string(out), "ERROR") {
-			slog.Warn("pg_restore completed with warnings", "output", string(out))
-		} else {
-			return nil, fmt.Errorf("pg_restore: %w\noutput: %s", err, string(out))
+		// psql may exit non-zero on warnings; check if output contains fatal errors
+		outStr := string(out)
+		if strings.Contains(outStr, "FATAL") || strings.Contains(outStr, "could not") {
+			return nil, fmt.Errorf("psql restore: %w\noutput: %s", err, outStr)
 		}
+		slog.Warn("psql restore completed with warnings", "output", outStr)
 	}
 
 	ts, _ := p.getBackupTimestamp(ctx, rt, target)

@@ -118,14 +118,14 @@ func validateChecks(drillName string, checks []Check) error {
 		}
 
 		validTypes := map[string]bool{
-			"query": true, "schema": true, "freshness": true,
+			"query": true, "sql": true, "schema": true, "freshness": true,
 			"key_count": true, "key_sample": true, "row_count": true,
 		}
 		if !validTypes[check.Type] {
 			return fmt.Errorf("config: drill %q check %q has unknown type %q", drillName, check.Name, check.Type)
 		}
 
-		if check.Type == "query" && check.SQL == "" {
+		if (check.Type == "query" || check.Type == "sql") && check.SQL == "" {
 			return fmt.Errorf("config: drill %q check %q of type 'query' must have sql", drillName, check.Name)
 		}
 
