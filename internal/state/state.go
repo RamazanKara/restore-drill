@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 )
 
@@ -76,4 +77,67 @@ func Load(path string) (*LastRun, error) {
 		return nil, fmt.Errorf("unmarshal state: %w", err)
 	}
 	return &run, nil
+}
+
+// HistoryDir returns the directory for storing drill history.
+func HistoryDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "/tmp/.restore-drill/history"
+	}
+	return filepath.Join(home, ".restore-drill", "history")
+}
+
+// AppendHistory persists a run as a timestamped history entry.
+func AppendHistory(run *LastRun) error {
+	dir := HistoryDir()
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return fmt.Errorf("create history dir: %w", err)
+	}
+
+	filename := run.Timestamp.UTC().Format("20060102T150405Z") + ".json"
+	path := filepath.Join(dir, filename)
+
+	data, err := json.MarshalIndent(run, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal history: %w", err)
+	}
+
+	return os.WriteFile(path, data, 0o600)
+}
+
+// LoadHistory loads all runs from the history directory within the given window.
+func LoadHistory(since time.Time) ([]*LastRun, error) {
+	dir := HistoryDir()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("read history dir: %w", err)
+	}
+
+	var runs []*LastRun //nolint:prealloc // size unknown due to filtering
+	for _, e := range entries {
+		if e.IsDir() || filepath.Ext(e.Name()) != ".json" {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(dir, e.Name()))
+		if err != nil {
+			continue
+		}
+		var run LastRun
+		if err := json.Unmarshal(data, &run); err != nil {
+			continue
+		}
+		if run.Timestamp.Before(since) {
+			continue
+		}
+		runs = append(runs, &run)
+	}
+
+	sort.Slice(runs, func(i, j int) bool {
+		return runs[i].Timestamp.Before(runs[j].Timestamp)
+	})
+	return runs, nil
 }

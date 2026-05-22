@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"text/tabwriter"
@@ -50,6 +51,7 @@ func runCmd() *cobra.Command {
 	var format string
 	var parallel bool
 	var noCleanup bool
+	var target string
 
 	cmd := &cobra.Command{
 		Use:   "run",
@@ -58,6 +60,14 @@ func runCmd() *cobra.Command {
 			cfg, err := engine.LoadConfig(configPath)
 			if err != nil {
 				return fmt.Errorf("load config: %w", err)
+			}
+
+			// Override target (PITR timestamp) if provided
+			if target != "" {
+				for i := range cfg.Drills {
+					cfg.Drills[i].Restore.Target = target
+				}
+				slog.Info("PITR target override", "target", target)
 			}
 
 			rt, err := docker.New()
@@ -117,6 +127,7 @@ func runCmd() *cobra.Command {
 	cmd.Flags().StringVar(&format, "format", "table", "Output format: table, json")
 	cmd.Flags().BoolVar(&parallel, "parallel", false, "Run drills concurrently")
 	cmd.Flags().BoolVar(&noCleanup, "no-cleanup", false, "Keep containers running after drill (for debugging)")
+	cmd.Flags().StringVar(&target, "target", "", "PITR target timestamp (e.g. 2024-01-15T10:30:00Z) for incident recovery mode")
 
 	return cmd
 }
@@ -160,6 +171,9 @@ func saveState(results []engine.DrillResult) {
 	if err := state.Save(state.DefaultPath(), run); err != nil {
 		slog.Warn("failed to save state", "error", err)
 	}
+	if err := state.AppendHistory(run); err != nil {
+		slog.Warn("failed to append history", "error", err)
+	}
 }
 
 func statusCmd() *cobra.Command {
@@ -199,18 +213,45 @@ func statusCmd() *cobra.Command {
 func reportCmd() *cobra.Command {
 	var format string
 	var days int
+	var output string
 
 	cmd := &cobra.Command{
 		Use:   "report",
 		Short: "Generate compliance reports from drill history",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Println("restore-drill report: not yet implemented")
-			return nil
+			since := time.Now().AddDate(0, 0, -days)
+			runs, err := state.LoadHistory(since)
+			if err != nil {
+				return fmt.Errorf("load history: %w", err)
+			}
+			if len(runs) == 0 {
+				return fmt.Errorf("no drill history found in the last %d days", days)
+			}
+
+			report := reporter.BuildComplianceReport(runs, since)
+
+			var w io.Writer = os.Stdout
+			if output != "" {
+				f, err := os.Create(output)
+				if err != nil {
+					return fmt.Errorf("create output file: %w", err)
+				}
+				defer f.Close()
+				w = f
+			}
+
+			switch format {
+			case "json":
+				return reporter.RenderJSON(w, report)
+			default:
+				return reporter.RenderHTML(w, report)
+			}
 		},
 	}
 
-	cmd.Flags().StringVar(&format, "format", "html", "Report format: html, json, pdf")
+	cmd.Flags().StringVar(&format, "format", "html", "Report format: html, json")
 	cmd.Flags().IntVar(&days, "last", 90, "Include drills from the last N days")
+	cmd.Flags().StringVarP(&output, "output", "o", "", "Output file (default: stdout)")
 
 	return cmd
 }
