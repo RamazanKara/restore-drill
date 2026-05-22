@@ -32,13 +32,13 @@ archives:
 
 dockers:
   - image_templates:
-      - "ghcr.io/fluentorbit/restore-drill:{{ .Version }}-amd64"
+      - "ghcr.io/ramazankara/restore-drill:{{ .Version }}-amd64"
     use: buildx
     build_flag_templates:
       - "--platform=linux/amd64"
     dockerfile: Dockerfile
   - image_templates:
-      - "ghcr.io/fluentorbit/restore-drill:{{ .Version }}-arm64"
+      - "ghcr.io/ramazankara/restore-drill:{{ .Version }}-arm64"
     use: buildx
     build_flag_templates:
       - "--platform=linux/arm64"
@@ -46,14 +46,14 @@ dockers:
     dockerfile: Dockerfile
 
 docker_manifests:
-  - name_template: "ghcr.io/fluentorbit/restore-drill:{{ .Version }}"
+  - name_template: "ghcr.io/ramazankara/restore-drill:{{ .Version }}"
     image_templates:
-      - "ghcr.io/fluentorbit/restore-drill:{{ .Version }}-amd64"
-      - "ghcr.io/fluentorbit/restore-drill:{{ .Version }}-arm64"
-  - name_template: "ghcr.io/fluentorbit/restore-drill:latest"
+      - "ghcr.io/ramazankara/restore-drill:{{ .Version }}-amd64"
+      - "ghcr.io/ramazankara/restore-drill:{{ .Version }}-arm64"
+  - name_template: "ghcr.io/ramazankara/restore-drill:latest"
     image_templates:
-      - "ghcr.io/fluentorbit/restore-drill:{{ .Version }}-amd64"
-      - "ghcr.io/fluentorbit/restore-drill:{{ .Version }}-arm64"
+      - "ghcr.io/ramazankara/restore-drill:{{ .Version }}-amd64"
+      - "ghcr.io/ramazankara/restore-drill:{{ .Version }}-arm64"
 
 checksum:
   name_template: "checksums.txt"
