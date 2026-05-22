@@ -2,6 +2,8 @@ module github.com/fluentorbit/restore-drill
 
 go 1.25.0
 
+toolchain go1.25.4
+
 require (
 	github.com/docker/docker v25.0.6+incompatible
 	github.com/docker/go-connections v0.5.0
