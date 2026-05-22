@@ -1,0 +1,37 @@
+# MySQL xtrabackup verification example.
+# Requires the backup file accessible at the configured source path.
+
+drills:
+  - name: mysql-xtrabackup
+    provider: mysql
+    backup:
+      tool: xtrabackup
+      source: ${XTRABACKUP_PATH:-/backups/mysql/xtrabackup}
+    restore:
+      timeout: 15m
+      container:
+        image: percona/percona-server:8.0
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+        resources:
+          memory: 2Gi
+    checks:
+      - name: table-count
+        type: sql
+        sql: "SELECT count(*) FROM information_schema.tables WHERE table_schema NOT IN ('mysql','information_schema','performance_schema','sys')"
+        expect: ">= 10"
+      - name: row-count-products
+        type: sql
+        sql: "SELECT count(*) FROM shop.products"
+        expect: "> 0"
+      - name: data-freshness
+        type: sql
+        sql: "SELECT max(updated_at) FROM shop.orders"
+        expect: "age < 25h"
+
+metrics:
+  prometheus:
+    enabled: true
+    pushgateway: http://pushgateway:9091
+    labels:
+      environment: production

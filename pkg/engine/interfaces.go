@@ -1,5 +1,4 @@
 package engine
-package engine
 
 import "context"
 
@@ -9,10 +8,10 @@ type Provider interface {
 	Name() string
 
 	// Restore pulls a backup and restores it into the target container.
-	Restore(ctx context.Context, cfg BackupConfig, target Container) (*RestoreResult, error)
+	Restore(ctx context.Context, rt Runtime, cfg BackupConfig, target Container) (*RestoreResult, error)
 
 	// Validate runs provider-specific checks against the restored data.
-	Validate(ctx context.Context, target Container, checks []Check) (*ValidationResult, error)
+	Validate(ctx context.Context, rt Runtime, target Container, checks []Check) (*ValidationResult, error)
 
 	// Cleanup performs provider-specific teardown.
 	Cleanup(ctx context.Context, target Container) error

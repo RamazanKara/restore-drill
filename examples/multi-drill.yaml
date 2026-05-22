@@ -1,0 +1,74 @@
+# Multi-drill example: verify all databases in one config.
+# Run with: restore-drill run --config multi-drill.yaml --parallel
+
+drills:
+  - name: postgres-primary
+    provider: postgres
+    backup:
+      tool: pgbackrest
+      stanza: main
+      repo: ${PGBACKREST_REPO_PATH}
+    restore:
+      timeout: 15m
+      container:
+        image: postgres:16
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        resources:
+          memory: 2Gi
+    checks:
+      - name: row-count
+        type: sql
+        sql: "SELECT count(*) FROM users"
+        expect: "> 1000"
+      - name: data-freshness
+        type: sql
+        sql: "SELECT max(updated_at) FROM orders"
+        expect: "age < 24h"
+
+  - name: redis-sessions
+    provider: redis
+    backup:
+      tool: rdb
+      source: ${REDIS_BACKUP_PATH:-/backups/redis/dump.rdb}
+    restore:
+      timeout: 5m
+      container:
+        image: redis:7-alpine
+    checks:
+      - name: key-count
+        type: key_count
+        expect: "> 500"
+      - name: health-key
+        type: key_sample
+        keys:
+          - "session:health-check"
+        expect: "true"
+
+  - name: mysql-reporting
+    provider: mysql
+    backup:
+      tool: mysqldump
+      source: ${MYSQL_BACKUP_PATH:-/backups/mysql/reporting.sql.gz}
+    restore:
+      timeout: 10m
+      container:
+        image: mysql:8
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+    checks:
+      - name: tables-exist
+        type: sql
+        sql: "SELECT count(*) FROM information_schema.tables WHERE table_schema='reporting'"
+        expect: ">= 5"
+
+metrics:
+  prometheus:
+    enabled: true
+    pushgateway: ${PUSHGATEWAY_URL:-http://pushgateway:9091}
+    labels:
+      environment: ${ENVIRONMENT:-staging}
+      team: platform
+
+reporting:
+  format: table

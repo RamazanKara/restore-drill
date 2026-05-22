@@ -1,4 +1,3 @@
-package main
 // Package metrics handles Prometheus metric registration and pushing.
 package metrics
 

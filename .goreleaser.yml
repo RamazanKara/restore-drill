@@ -15,7 +15,10 @@ builds:
       - amd64
       - arm64
     ldflags:
-      - -s -w -X main.version={{.Version}}
+      - -s -w
+        -X github.com/fluentorbit/restore-drill/internal/version.Version={{.Version}}
+        -X github.com/fluentorbit/restore-drill/internal/version.Commit={{.Commit}}
+        -X github.com/fluentorbit/restore-drill/internal/version.Date={{.Date}}
 
 archives:
   - id: default

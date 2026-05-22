@@ -39,8 +39,8 @@ Compliance frameworks (NIS2, ISO 27001, BSI C5) require **tested** recovery. Not
 | PostgreSQL | pgBackRest, pg_dump, WAL-G | GA |
 | MySQL/MariaDB | mysqldump, xtrabackup, mariabackup | GA |
 | Redis | RDB snapshots, AOF | GA |
-| S3-compatible | rclone, mc (MinIO client) | GA |
-| etcd | etcdctl snapshot | GA |
+| S3-compatible | rclone, mc (MinIO client) | Planned |
+| etcd | etcdctl snapshot | Planned |
 | ClickHouse | clickhouse-backup | Planned |
 | MongoDB | mongodump | Planned |
 
@@ -240,13 +240,13 @@ See [deploy/helm/](deploy/helm/) for values reference.
 ## Roadmap
 
 - [x] PostgreSQL provider (pgBackRest, pg_dump, WAL-G)
-- [x] MySQL provider (mysqldump, xtrabackup)
-- [x] Redis provider (RDB)
-- [x] S3 provider (rclone)
-- [x] etcd provider (etcdctl)
+- [x] MySQL provider (mysqldump, xtrabackup, mariabackup)
+- [x] Redis provider (RDB, AOF)
 - [x] Prometheus metrics + Pushgateway
-- [x] HTML/JSON compliance reports
-- [x] Helm chart
+- [x] JSON output format
+- [x] Helm chart (CronJob)
+- [ ] S3 provider (rclone)
+- [ ] etcd provider (etcdctl)
 - [ ] ClickHouse provider
 - [ ] MongoDB provider
 - [ ] Velero integration (restore from Velero snapshots)

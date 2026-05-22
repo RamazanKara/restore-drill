@@ -1,0 +1,74 @@
+# restore-drill example configuration
+# See docs/ARCHITECTURE.md for full reference.
+
+drills:
+  - name: nightly-postgres
+    provider: postgres
+    backup:
+      tool: pgbackrest
+      stanza: main
+      repo: /var/lib/pgbackrest
+    restore:
+      timeout: 10m
+      container:
+        image: postgres:16
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+    checks:
+      - name: row-count-users
+        type: sql
+        sql: "SELECT count(*) FROM users"
+        expect: "> 0"
+      - name: recent-data
+        type: sql
+        sql: "SELECT max(created_at) FROM orders"
+        expect: 'age < 24h'
+
+  - name: nightly-redis
+    provider: redis
+    backup:
+      tool: rdb
+      source: /backups/redis/dump.rdb
+    restore:
+      timeout: 5m
+      container:
+        image: redis:7-alpine
+    checks:
+      - name: key-count
+        type: key_count
+        expect: "> 1000"
+      - name: session-key-exists
+        type: key_sample
+        keys:
+          - "session:health-check"
+        expect: "true"
+
+  - name: nightly-mysql
+    provider: mysql
+    backup:
+      tool: mysqldump
+      source: /backups/mysql/dump.sql
+    restore:
+      timeout: 10m
+      container:
+        image: mysql:8
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+    checks:
+      - name: table-count
+        type: sql
+        sql: "SELECT count(*) FROM information_schema.tables WHERE table_schema='app'"
+        expect: ">= 10"
+
+# Metrics push (optional)
+metrics:
+  prometheus:
+    enabled: false
+    pushgateway: http://pushgateway.monitoring:9091
+    labels:
+      environment: production
+
+# Reporting
+reporting:
+  format: table
+  output: ""

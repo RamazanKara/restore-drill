@@ -3,3 +3,4 @@ dist/
 reports/
 *.env
 .DS_Store
+plan/

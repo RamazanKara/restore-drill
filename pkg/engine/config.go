@@ -1,5 +1,4 @@
 package engine
-package engine
 
 // DrillConfig represents the configuration for a single drill.
 type DrillConfig struct {

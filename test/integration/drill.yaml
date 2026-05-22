@@ -1,0 +1,38 @@
+# Integration test drill configuration
+# Used by test/integration/integration_test.go with a live Docker daemon.
+
+drills:
+  - name: test-postgres-dump
+    provider: postgres
+    backup:
+      tool: pg_dump
+      source: /fixtures/postgres-dump.sql
+    restore:
+      timeout: 2m
+      container:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+    checks:
+      - name: users-exist
+        type: sql
+        sql: "SELECT count(*) FROM users"
+        expect: "> 0"
+      - name: orders-exist
+        type: sql
+        sql: "SELECT count(*) FROM orders"
+        expect: ">= 4"
+
+  - name: test-redis-rdb
+    provider: redis
+    backup:
+      tool: rdb
+      source: /fixtures/dump.rdb
+    restore:
+      timeout: 1m
+      container:
+        image: redis:7-alpine
+    checks:
+      - name: has-keys
+        type: key_count
+        expect: "> 0"

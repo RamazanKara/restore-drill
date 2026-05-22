@@ -1,0 +1,11 @@
+{{- if and .Values.config.inline (not .Values.config.existingConfigMap) }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "restore-drill.fullname" . }}
+  labels:
+    {{- include "restore-drill.labels" . | nindent 4 }}
+data:
+  drill.yaml: |
+    {{- .Values.config.inline | nindent 4 }}
+{{- end }}

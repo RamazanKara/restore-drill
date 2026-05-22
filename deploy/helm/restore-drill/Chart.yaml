@@ -1,0 +1,16 @@
+apiVersion: v2
+name: restore-drill
+description: Automated backup verification for self-hosted infrastructure
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - backup
+  - restore
+  - verification
+  - disaster-recovery
+  - postgres
+  - mysql
+  - redis
+maintainers:
+  - name: fluentorbit

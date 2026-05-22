@@ -1,0 +1,85 @@
+# restore-drill Helm values
+image:
+  repository: ghcr.io/fluentorbit/restore-drill
+  tag: ""  # defaults to appVersion
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# CronJob schedule (default: daily at 03:00)
+schedule: "0 3 * * *"
+
+# Drill configuration inline or from existing ConfigMap/Secret
+config:
+  # Inline drill.yaml content (preferred for simple setups)
+  inline: ""
+  # Reference an existing ConfigMap name containing drill.yaml
+  existingConfigMap: ""
+
+# Environment variables (for secret interpolation in drill.yaml)
+env: []
+  # - name: PGBACKREST_REPO1_S3_KEY
+  #   valueFrom:
+  #     secretKeyRef:
+  #       name: backup-credentials
+  #       key: s3-key
+
+# Extra volume mounts (for mounting backup data / credentials)
+extraVolumes: []
+extraVolumeMounts: []
+
+# CronJob settings
+concurrencyPolicy: Forbid
+successfulJobsHistoryLimit: 3
+failedJobsHistoryLimit: 3
+activeDeadlineSeconds: 3600
+backoffLimit: 1
+ttlSecondsAfterFinished: 86400
+
+# Pod settings
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+podAnnotations: {}
+podLabels: {}
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 65534
+  fsGroup: 65534
+
+containerSecurityContext:
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+
+# Metrics push configuration
+metrics:
+  enabled: false
+  pushgateway: ""
+
+# Network policy
+networkPolicy:
+  enabled: false
+  egress: []
+    # - to:
+    #   - ipBlock:
+    #       cidr: 10.0.0.0/8
