@@ -1,0 +1,67 @@
+version: 2
+
+project_name: restore-drill
+
+builds:
+  - id: restore-drill
+    main: ./cmd/restore-drill
+    binary: restore-drill
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+archives:
+  - id: default
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+dockers:
+  - image_templates:
+      - "ghcr.io/fluentorbit/restore-drill:{{ .Version }}-amd64"
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/amd64"
+    dockerfile: Dockerfile
+  - image_templates:
+      - "ghcr.io/fluentorbit/restore-drill:{{ .Version }}-arm64"
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/arm64"
+    goarch: arm64
+    dockerfile: Dockerfile
+
+docker_manifests:
+  - name_template: "ghcr.io/fluentorbit/restore-drill:{{ .Version }}"
+    image_templates:
+      - "ghcr.io/fluentorbit/restore-drill:{{ .Version }}-amd64"
+      - "ghcr.io/fluentorbit/restore-drill:{{ .Version }}-arm64"
+  - name_template: "ghcr.io/fluentorbit/restore-drill:latest"
+    image_templates:
+      - "ghcr.io/fluentorbit/restore-drill:{{ .Version }}-amd64"
+      - "ghcr.io/fluentorbit/restore-drill:{{ .Version }}-arm64"
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^chore:"
+      - "^ci:"
+
+sboms:
+  - artifacts: archive

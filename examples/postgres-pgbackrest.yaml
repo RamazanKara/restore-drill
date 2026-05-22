@@ -1,0 +1,56 @@
+# Example: PostgreSQL backup verification with pgBackRest
+drills:
+  - name: production-postgres
+    provider: postgres
+    schedule: "0 3 * * 1"
+    backup:
+      tool: pgbackrest
+      stanza: main
+      repo:
+        type: s3
+        bucket: my-backups
+        endpoint: s3.eu-central-1.amazonaws.com
+        prefix: pgbackrest/
+        region: eu-central-1
+    restore:
+      target: latest
+      container:
+        image: postgres:16
+        resources:
+          memory: 2Gi
+          cpu: "1"
+      timeout: 30m
+    validate:
+      - name: users-exist
+        type: query
+        sql: "SELECT count(*) FROM users"
+        expect: "> 0"
+      - name: data-freshness
+        type: query
+        sql: "SELECT extract(epoch FROM now() - max(updated_at)) FROM orders"
+        expect: "< 90000"
+      - name: schema-version
+        type: query
+        sql: "SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1"
+        expect: ">= 142"
+      - name: extensions-present
+        type: extensions
+        expect: "pgcrypto, uuid-ossp, pg_stat_statements"
+    alerts:
+      - type: prometheus
+        endpoint: http://pushgateway:9091
+      - type: webhook
+        url: https://hooks.slack.com/services/T00/B00/xxx
+
+metrics:
+  prometheus:
+    enabled: true
+    pushgateway: http://pushgateway:9091
+    labels:
+      environment: production
+      team: platform
+
+reporting:
+  format: [json, html]
+  output: ./reports/
+  retention: 90d

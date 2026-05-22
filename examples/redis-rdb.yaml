@@ -1,0 +1,42 @@
+# Example: Redis RDB backup verification
+drills:
+  - name: production-redis
+    provider: redis
+    schedule: "0 4 * * 1"
+    backup:
+      tool: rdb
+      repo:
+        type: s3
+        bucket: my-backups
+        prefix: redis/
+        region: eu-central-1
+    restore:
+      target: latest
+      container:
+        image: redis:7-alpine
+        resources:
+          memory: 512Mi
+          cpu: "500m"
+      timeout: 5m
+    validate:
+      - name: key-count
+        type: key_count
+        expect: "> 1000"
+      - name: session-keys
+        type: key_sample
+        keys: ["session:*"]
+        expect: "exists"
+      - name: cache-keys
+        type: key_sample
+        keys: ["cache:*"]
+        expect: "exists"
+    alerts:
+      - type: prometheus
+        endpoint: http://pushgateway:9091
+
+metrics:
+  prometheus:
+    enabled: true
+    pushgateway: http://pushgateway:9091
+    labels:
+      environment: production
