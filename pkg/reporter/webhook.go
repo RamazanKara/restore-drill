@@ -30,9 +30,9 @@ func NewWebhook(url string, headers map[string]string) *Webhook {
 
 // webhookPayload is the JSON structure sent to the webhook endpoint.
 type webhookPayload struct {
-	Timestamp time.Time     `json:"timestamp"`
-	Summary   summary       `json:"summary"`
-	Results   []jsonResult  `json:"results"`
+	Timestamp time.Time    `json:"timestamp"`
+	Summary   summary      `json:"summary"`
+	Results   []jsonResult `json:"results"`
 }
 
 type summary struct {
@@ -44,7 +44,7 @@ type summary struct {
 }
 
 // Report sends results to the configured webhook URL.
-func (w *Webhook) Report(_ context.Context, results []engine.DrillResult) error {
+func (w *Webhook) Report(ctx context.Context, results []engine.DrillResult) error {
 	passed := 0
 	failed := 0
 	var totalDuration time.Duration
@@ -116,7 +116,7 @@ func (w *Webhook) Report(_ context.Context, results []engine.DrillResult) error 
 		return fmt.Errorf("marshal webhook payload: %w", err)
 	}
 
-	req, err := http.NewRequest(http.MethodPost, w.URL, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, w.URL, bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("create webhook request: %w", err)
 	}

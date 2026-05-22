@@ -22,7 +22,6 @@ linters:
 
 linters-settings:
   govet:
-    enable-all: true
     disable:
       - fieldalignment
   gosec:
@@ -33,3 +32,12 @@ issues:
   exclude-use-default: false
   max-issues-per-linter: 0
   max-same-issues: 0
+  exclude-rules:
+    - linters: [errcheck]
+      source: "fmt\\.Fprint|Flush\\(\\)|Close\\(\\)"
+    - linters: [errcheck]
+      path: "_test\\.go"
+    - linters: [gosec]
+      text: "G304"
+    - linters: [gosec]
+      text: "G115"

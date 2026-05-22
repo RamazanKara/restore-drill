@@ -70,5 +70,5 @@ metrics:
 
 # Reporting
 reporting:
-  format: table
+  format: [table]
   output: ""

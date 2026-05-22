@@ -35,13 +35,13 @@ func New() (*Runtime, error) {
 
 // dockerContainer implements engine.Container.
 type dockerContainer struct {
-	id       string
-	host     string
-	portMap  map[int]int
+	id      string
+	host    string
+	portMap map[int]int
 }
 
 func (c *dockerContainer) ID() string   { return c.id }
-func (c *dockerContainer) Host() string  { return c.host }
+func (c *dockerContainer) Host() string { return c.host }
 func (c *dockerContainer) Port(containerPort int) int {
 	return c.portMap[containerPort]
 }
@@ -69,7 +69,7 @@ func (r *Runtime) Create(ctx context.Context, spec engine.ContainerSpec) (engine
 	}
 
 	// Environment variables
-	var env []string
+	env := make([]string, 0, len(spec.Env))
 	for k, v := range spec.Env {
 		env = append(env, k+"="+v)
 	}

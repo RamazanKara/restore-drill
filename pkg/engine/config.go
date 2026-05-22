@@ -50,11 +50,11 @@ type ResourceConf struct {
 
 // Check defines a validation check.
 type Check struct {
-	Type   string `yaml:"type"`
-	Name   string `yaml:"name"`
-	SQL    string `yaml:"sql,omitempty"`
+	Type   string   `yaml:"type"`
+	Name   string   `yaml:"name"`
+	SQL    string   `yaml:"sql,omitempty"`
 	Keys   []string `yaml:"keys,omitempty"`
-	Expect string `yaml:"expect"`
+	Expect string   `yaml:"expect"`
 }
 
 // AlertSpec defines where to send alerts.

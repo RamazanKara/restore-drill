@@ -13,17 +13,17 @@ import (
 
 // jsonResult is the serialization format for drill results.
 type jsonResult struct {
-	Name             string        `json:"name"`
-	Provider         string        `json:"provider"`
-	Status           string        `json:"status"`
-	StartedAt        time.Time     `json:"started_at"`
-	Duration         string        `json:"duration"`
-	DurationMs       int64         `json:"duration_ms"`
-	BackupTimestamp  string        `json:"backup_timestamp,omitempty"`
-	BackupAge        string        `json:"backup_age,omitempty"`
-	ValidationPassed bool          `json:"validation_passed"`
-	Error            string        `json:"error,omitempty"`
-	Checks           []jsonCheck   `json:"checks"`
+	Name             string      `json:"name"`
+	Provider         string      `json:"provider"`
+	Status           string      `json:"status"`
+	StartedAt        time.Time   `json:"started_at"`
+	Duration         string      `json:"duration"`
+	DurationMs       int64       `json:"duration_ms"`
+	BackupTimestamp  string      `json:"backup_timestamp,omitempty"`
+	BackupAge        string      `json:"backup_age,omitempty"`
+	ValidationPassed bool        `json:"validation_passed"`
+	Error            string      `json:"error,omitempty"`
+	Checks           []jsonCheck `json:"checks"`
 }
 
 type jsonCheck struct {

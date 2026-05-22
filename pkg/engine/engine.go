@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"time"
 )
 
@@ -61,7 +62,7 @@ func (e *Engine) RegisterProvider(p Provider) {
 
 // Run executes all configured drills sequentially.
 func (e *Engine) Run(ctx context.Context, drills []DrillConfig) ([]DrillResult, error) {
-	var results []DrillResult
+	results := make([]DrillResult, 0, len(drills))
 
 	for _, drill := range drills {
 		result := e.executeDrill(ctx, drill)
@@ -249,7 +250,9 @@ func parseMemory(s string) int64 {
 		}
 	}
 
-	var n int64
-	fmt.Sscanf(numStr, "%d", &n)
+	n, err := strconv.ParseInt(numStr, 10, 64)
+	if err != nil {
+		return 0
+	}
 	return n * multiplier
 }

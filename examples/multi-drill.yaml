@@ -71,4 +71,4 @@ metrics:
       team: platform
 
 reporting:
-  format: table
+  format: [table]

@@ -76,9 +76,9 @@ type pod struct {
 	ports     map[int]int
 }
 
-func (p *pod) ID() string              { return p.namespace + "/" + p.name }
-func (p *pod) Host() string            { return p.podIP }
-func (p *pod) Port(container int) int  { return container } // In-cluster, ports are direct.
+func (p *pod) ID() string             { return p.namespace + "/" + p.name }
+func (p *pod) Host() string           { return p.podIP }
+func (p *pod) Port(container int) int { return container } // In-cluster, ports are direct.
 
 // Create provisions a pod with the given spec and waits for it to be ready.
 func (r *Runtime) Create(ctx context.Context, spec engine.ContainerSpec) (engine.Container, error) {

@@ -4,9 +4,10 @@
 
 Backups that are never restored are not backups. `restore-drill` continuously proves your recovery works by restoring real backups into ephemeral environments, running validation queries, and publishing RTO/RPO as Prometheus metrics.
 
-[![CI](https://github.com/fluentorbit/restore-drill/actions/workflows/ci.yml/badge.svg)](https://github.com/fluentorbit/restore-drill/actions)
+[![CI](https://github.com/RamazanKara/restore-drill/actions/workflows/ci.yml/badge.svg)](https://github.com/RamazanKara/restore-drill/actions)
 [![Go Report Card](https://goreportcard.com/badge/github.com/fluentorbit/restore-drill)](https://goreportcard.com/report/github.com/fluentorbit/restore-drill)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/RamazanKara/restore-drill)](https://github.com/RamazanKara/restore-drill/releases)
 
 ## The problem
 
@@ -75,7 +76,7 @@ spec:
           restartPolicy: Never
           containers:
             - name: drill
-              image: ghcr.io/fluentorbit/restore-drill:latest
+              image: ghcr.io/ramazankara/restore-drill:latest
               args: ["run", "--config", "/etc/drill/config.yaml"]
               volumeMounts:
                 - name: config
@@ -110,17 +111,19 @@ drills:
           memory: 2Gi
           cpu: "1"
       timeout: 30m
-    validate:
-      - type: query
+    checks:
+      - name: user-count
+        type: query
         sql: "SELECT count(*) FROM users"
         expect: "> 0"
-      - type: query
+      - name: data-freshness
+        type: query
         sql: "SELECT max(updated_at) FROM orders"
         expect: "age < 25h"         # Data freshness check
-      - type: schema
-        expect: "matches_migration_version >= 142"
-      - type: extensions
-        expect: ["pgcrypto", "uuid-ossp", "pg_stat_statements"]
+      - name: schema-version
+        type: schema
+        sql: "SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1"
+        expect: ">= 142"
     alerts:
       - type: prometheus            # Push to Pushgateway
         endpoint: http://pushgateway:9091
@@ -139,12 +142,14 @@ drills:
       container:
         image: redis:7-alpine
       timeout: 5m
-    validate:
-      - type: key_count
+    checks:
+      - name: key-count
+        type: key_count
         expect: "> 1000"
-      - type: key_sample
+      - name: session-keys
+        type: key_sample
         keys: ["session:*", "cache:*"]
-        expect: "exists"
+        expect: "> 0"
 
 metrics:
   prometheus:

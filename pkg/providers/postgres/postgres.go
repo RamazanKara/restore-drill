@@ -196,7 +196,9 @@ func (p *Provider) restorePgDump(ctx context.Context, rt engine.Runtime, cfg eng
 		if _, err := tw.Write(data); err != nil {
 			return nil, fmt.Errorf("tar write: %w", err)
 		}
-		tw.Close()
+		if err := tw.Close(); err != nil {
+			return nil, fmt.Errorf("tar close: %w", err)
+		}
 
 		if err := rt.CopyTo(ctx, target, "/tmp/", &buf); err != nil {
 			return nil, fmt.Errorf("copy dump to container: %w", err)
