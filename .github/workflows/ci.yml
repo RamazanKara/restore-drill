@@ -55,7 +55,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: azure/setup-helm@v4
+      - uses: azure/setup-helm@v5
 
       - name: Helm lint and template
         run: make helm-lint
@@ -71,7 +71,7 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - uses: azure/setup-helm@v4
+      - uses: azure/setup-helm@v5
 
       - uses: helm/kind-action@v1
         with:
