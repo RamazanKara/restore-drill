@@ -22,7 +22,7 @@ test-integration:
 	RESTORE_DRILL_INTEGRATION=1 go test -race -count=1 -timeout=10m ./test/integration/...
 
 test-k8s:
-	./test/k8s/smoke.sh
+	bash ./test/k8s/smoke.sh
 
 vet:
 	go vet ./...
