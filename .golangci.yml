@@ -1,39 +1,50 @@
-version: 2
+version: "2"
+run:
+  go: "1.25"
 linters:
   enable:
-    - errcheck
-    - govet
-    - staticcheck
-    - unused
-    - ineffassign
-    - misspell
-    - unconvert
     - bodyclose
-    - noctx
     - gosec
+    - misspell
+    - noctx
     - prealloc
-
-linters-settings:
-  govet:
-    disable:
-      - fieldalignment
-  gosec:
-    excludes:
-      - G104 # unhandled errors in deferred calls
-
+    - unconvert
+  settings:
+    gosec:
+      excludes:
+        - G104
+    govet:
+      disable:
+        - fieldalignment
+  exclusions:
+    generated: lax
+    rules:
+      - linters:
+          - errcheck
+        source: fmt\.Fprint|Flush\(\)|Close\(\)
+      - linters:
+          - errcheck
+        path: _test\.go
+      - linters:
+          - gosec
+        text: G304
+      - linters:
+          - gosec
+        text: G115
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
 issues:
-  exclude-use-default: false
   max-issues-per-linter: 0
   max-same-issues: 0
-  exclude-rules:
-    - linters: [errcheck]
-      source: "fmt\\.Fprint|Flush\\(\\)|Close\\(\\)"
-    - linters: [errcheck]
-      path: "_test\\.go"
-    - linters: [gosec]
-      text: "G304"
-    - linters: [gosec]
-      text: "G115"
-run:
-  timeout: 5m
-  go: "1.25"
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
