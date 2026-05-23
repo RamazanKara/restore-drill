@@ -13,9 +13,52 @@ import (
 // envVarPattern matches ${VAR_NAME} or ${VAR_NAME:-default} patterns.
 var envVarPattern = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}`)
 
+var supportedBackupTools = map[string]map[string]struct{}{
+	"postgres": {
+		"pg_dump":    {},
+		"pg_restore": {},
+		"pgbackrest": {},
+		"wal-g":      {},
+		"walg":       {},
+	},
+	"mysql": {
+		"mysqldump":   {},
+		"xtrabackup":  {},
+		"mariabackup": {},
+	},
+	"redis": {
+		"rdb": {},
+		"aof": {},
+	},
+}
+
+var supportedRepoTypes = map[string]struct{}{
+	"s3":            {},
+	"s3-compatible": {},
+}
+
+var supportedCheckTypes = map[string]struct{}{
+	"query":      {},
+	"sql":        {},
+	"schema":     {},
+	"freshness":  {},
+	"key_count":  {},
+	"key_sample": {},
+	"row_count":  {},
+	"extensions": {},
+}
+
+var sqlBackedCheckTypes = map[string]struct{}{
+	"query":     {},
+	"sql":       {},
+	"schema":    {},
+	"freshness": {},
+	"row_count": {},
+}
+
 // LoadConfig reads and parses a drill config from the given file path.
 func LoadConfig(path string) (*Config, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- config path is an explicit user CLI argument.
 	if err != nil {
 		return nil, fmt.Errorf("reading config: %w", err)
 	}
@@ -80,16 +123,30 @@ func validateConfig(cfg *Config) error {
 			return fmt.Errorf("config: drill %q must specify a provider", drill.Name)
 		}
 
-		validProviders := map[string]bool{
-			"postgres": true, "mysql": true, "redis": true,
-			"s3": true, "etcd": true,
-		}
-		if !validProviders[drill.Provider] {
+		tools, ok := supportedBackupTools[drill.Provider]
+		if !ok {
 			return fmt.Errorf("config: drill %q has unknown provider %q", drill.Name, drill.Provider)
 		}
 
 		if drill.Backup.Tool == "" {
 			return fmt.Errorf("config: drill %q must specify backup.tool", drill.Name)
+		}
+		if _, ok := tools[drill.Backup.Tool]; !ok {
+			return fmt.Errorf("config: drill %q has unsupported backup.tool %q for provider %q", drill.Name, drill.Backup.Tool, drill.Provider)
+		}
+		if drill.Backup.Source == "" && drill.Backup.Repo.Type == "" {
+			return fmt.Errorf("config: drill %q must specify backup.source or backup.repo.type", drill.Name)
+		}
+		if drill.Backup.Repo.Type != "" {
+			if _, ok := supportedRepoTypes[drill.Backup.Repo.Type]; !ok {
+				return fmt.Errorf("config: drill %q has unsupported backup.repo.type %q", drill.Name, drill.Backup.Repo.Type)
+			}
+			if drill.Backup.Repo.Bucket == "" {
+				return fmt.Errorf("config: drill %q must specify backup.repo.bucket when backup.repo.type is set", drill.Name)
+			}
+			if drill.Backup.Repo.Prefix == "" {
+				return fmt.Errorf("config: drill %q must specify backup.repo.prefix when backup.repo.type is set", drill.Name)
+			}
 		}
 
 		if drill.Restore.Container.Image == "" {
@@ -117,16 +174,16 @@ func validateChecks(drillName string, checks []Check) error {
 			return fmt.Errorf("config: drill %q check[%d] must have a name", drillName, i)
 		}
 
-		validTypes := map[string]bool{
-			"query": true, "sql": true, "schema": true, "freshness": true,
-			"key_count": true, "key_sample": true, "row_count": true,
-		}
-		if !validTypes[check.Type] {
+		if _, ok := supportedCheckTypes[check.Type]; !ok {
 			return fmt.Errorf("config: drill %q check %q has unknown type %q", drillName, check.Name, check.Type)
 		}
 
-		if (check.Type == "query" || check.Type == "sql") && check.SQL == "" {
-			return fmt.Errorf("config: drill %q check %q of type 'query' must have sql", drillName, check.Name)
+		if _, ok := sqlBackedCheckTypes[check.Type]; ok && check.SQL == "" {
+			return fmt.Errorf("config: drill %q check %q of type %q must have sql", drillName, check.Name, check.Type)
+		}
+
+		if check.Type == "key_sample" && len(check.Keys) == 0 {
+			return fmt.Errorf("config: drill %q check %q of type 'key_sample' must have keys", drillName, check.Name)
 		}
 
 		if check.Expect == "" {

@@ -40,7 +40,7 @@ drills:
       - type: prometheus
         endpoint: http://pushgateway:9091
       - type: webhook
-        url: https://hooks.slack.com/services/T00/B00/xxx
+        url: ${RESTORE_DRILL_WEBHOOK_URL:-https://example.invalid/restore-drill-webhook}
 
 metrics:
   prometheus:

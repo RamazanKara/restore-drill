@@ -16,9 +16,9 @@ builds:
       - arm64
     ldflags:
       - -s -w
-        -X github.com/fluentorbit/restore-drill/internal/version.Version={{.Version}}
-        -X github.com/fluentorbit/restore-drill/internal/version.Commit={{.Commit}}
-        -X github.com/fluentorbit/restore-drill/internal/version.Date={{.Date}}
+        -X github.com/RamazanKara/restore-drill/internal/version.Version={{.Version}}
+        -X github.com/RamazanKara/restore-drill/internal/version.Commit={{.Commit}}
+        -X github.com/RamazanKara/restore-drill/internal/version.Date={{.Date}}
 
 archives:
   - id: default
@@ -36,14 +36,26 @@ dockers:
     use: buildx
     build_flag_templates:
       - "--platform=linux/amd64"
-    dockerfile: Dockerfile
+      - "--label=org.opencontainers.image.title=restore-drill"
+      - "--label=org.opencontainers.image.description=Automated backup restore verification for PostgreSQL, MySQL/MariaDB, and Redis."
+      - "--label=org.opencontainers.image.source=https://github.com/RamazanKara/restore-drill"
+      - "--label=org.opencontainers.image.licenses=Apache-2.0"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+    dockerfile: Dockerfile.goreleaser
   - image_templates:
       - "ghcr.io/ramazankara/restore-drill:{{ .Version }}-arm64"
     use: buildx
     build_flag_templates:
       - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.title=restore-drill"
+      - "--label=org.opencontainers.image.description=Automated backup restore verification for PostgreSQL, MySQL/MariaDB, and Redis."
+      - "--label=org.opencontainers.image.source=https://github.com/RamazanKara/restore-drill"
+      - "--label=org.opencontainers.image.licenses=Apache-2.0"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
     goarch: arm64
-    dockerfile: Dockerfile
+    dockerfile: Dockerfile.goreleaser
 
 docker_manifests:
   - name_template: "ghcr.io/ramazankara/restore-drill:{{ .Version }}"

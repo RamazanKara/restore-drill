@@ -43,7 +43,15 @@ spec:
             - name: restore-drill
               image: {{ include "restore-drill.image" . }}
               imagePullPolicy: {{ .Values.image.pullPolicy }}
-              command: ["restore-drill", "run", "--config", "/config/drill.yaml"]
+              command:
+                - restore-drill
+                - run
+                - --config
+                - /config/drill.yaml
+                - --runtime
+                - {{ .Values.runtime.mode | quote }}
+                - --kube-namespace
+                - {{ .Values.runtime.namespace | default .Release.Namespace | quote }}
               securityContext:
                 {{- toYaml .Values.containerSecurityContext | nindent 16 }}
               resources:

@@ -47,6 +47,8 @@ func TestEvalExpression_Boolean(t *testing.T) {
 		{"true", "1", true},
 		{"true", "t", true},
 		{"true", "false", false},
+		{"exists", "true", true},
+		{"exists", "1", true},
 		{"false", "false", true},
 		{"false", "0", true},
 		{"false", "f", true},
@@ -55,6 +57,29 @@ func TestEvalExpression_Boolean(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.expect+"_"+tt.actual, func(t *testing.T) {
+			got, err := EvalExpression(tt.expect, tt.actual)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("EvalExpression(%q, %q) = %v, want %v", tt.expect, tt.actual, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEvalExpression_ListContains(t *testing.T) {
+	tests := []struct {
+		expect string
+		actual string
+		want   bool
+	}{
+		{"pgcrypto, uuid-ossp", "plpgsql, pgcrypto, uuid-ossp", true},
+		{"pgcrypto, missing", "plpgsql, pgcrypto", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.expect, func(t *testing.T) {
 			got, err := EvalExpression(tt.expect, tt.actual)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)

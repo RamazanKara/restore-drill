@@ -8,7 +8,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/push"
 
-	"github.com/fluentorbit/restore-drill/pkg/engine"
+	"github.com/RamazanKara/restore-drill/pkg/engine"
 )
 
 // PushResults pushes drill metrics to a Prometheus Pushgateway.
@@ -18,14 +18,39 @@ func PushResults(results []engine.DrillResult, pushgatewayURL string, labels map
 		env = "default"
 	}
 
+	registry := prometheus.NewRegistry()
+	drillDuration := prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{Namespace: namespace, Name: "duration_seconds", Help: "Time from start to validated restore."},
+		[]string{"drill", "provider", "environment"},
+	)
+	backupAge := prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{Namespace: namespace, Name: "backup_age_seconds", Help: "Age of the most recent backup used."},
+		[]string{"drill", "provider", "environment"},
+	)
+	validationPassed := prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{Namespace: namespace, Name: "validation_passed", Help: "1 if all checks passed, 0 otherwise."},
+		[]string{"drill", "provider", "environment"},
+	)
+	checksTotal := prometheus.NewCounterVec(
+		prometheus.CounterOpts{Namespace: namespace, Name: "validation_checks_total", Help: "Number of validation checks executed."},
+		[]string{"drill", "provider", "environment"},
+	)
+	checksFailed := prometheus.NewCounterVec(
+		prometheus.CounterOpts{Namespace: namespace, Name: "validation_checks_failed", Help: "Number of validation checks failed."},
+		[]string{"drill", "provider", "environment"},
+	)
+	lastSuccess := prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{Namespace: namespace, Name: "last_success_timestamp", Help: "Unix timestamp of last successful drill."},
+		[]string{"drill", "provider", "environment"},
+	)
+	runsTotal := prometheus.NewCounterVec(
+		prometheus.CounterOpts{Namespace: namespace, Name: "runs_total", Help: "Total drill executions."},
+		[]string{"drill", "provider", "environment", "status"},
+	)
+	registry.MustRegister(drillDuration, backupAge, validationPassed, checksTotal, checksFailed, lastSuccess, runsTotal)
+
 	pusher := push.New(pushgatewayURL, "restore_drill").
-		Collector(DrillDuration).
-		Collector(BackupAge).
-		Collector(ValidationPassed).
-		Collector(ChecksTotal).
-		Collector(ChecksFailed).
-		Collector(LastSuccess).
-		Collector(RunsTotal)
+		Gatherer(registry)
 
 	// Add custom labels as grouping
 	for k, v := range labels {
@@ -40,12 +65,12 @@ func PushResults(results []engine.DrillResult, pushgatewayURL string, labels map
 			status = "failure"
 		}
 
-		DrillDuration.With(prometheus.Labels{
+		drillDuration.With(prometheus.Labels{
 			"drill": r.Name, "provider": r.Provider, "environment": env,
 		}).Set(r.Duration.Seconds())
 
 		if !r.BackupTimestamp.IsZero() {
-			BackupAge.With(prometheus.Labels{
+			backupAge.With(prometheus.Labels{
 				"drill": r.Name, "provider": r.Provider, "environment": env,
 			}).Set(time.Since(r.BackupTimestamp).Seconds())
 		}
@@ -54,11 +79,11 @@ func PushResults(results []engine.DrillResult, pushgatewayURL string, labels map
 		if r.ValidationPassed {
 			passed = 1
 		}
-		ValidationPassed.With(prometheus.Labels{
+		validationPassed.With(prometheus.Labels{
 			"drill": r.Name, "provider": r.Provider, "environment": env,
 		}).Set(passed)
 
-		ChecksTotal.With(prometheus.Labels{
+		checksTotal.With(prometheus.Labels{
 			"drill": r.Name, "provider": r.Provider, "environment": env,
 		}).Add(float64(len(r.Checks)))
 
@@ -68,17 +93,17 @@ func PushResults(results []engine.DrillResult, pushgatewayURL string, labels map
 				failed++
 			}
 		}
-		ChecksFailed.With(prometheus.Labels{
+		checksFailed.With(prometheus.Labels{
 			"drill": r.Name, "provider": r.Provider, "environment": env,
 		}).Add(float64(failed))
 
 		if r.ValidationPassed && r.Error == nil {
-			LastSuccess.With(prometheus.Labels{
+			lastSuccess.With(prometheus.Labels{
 				"drill": r.Name, "provider": r.Provider, "environment": env,
 			}).Set(float64(time.Now().Unix()))
 		}
 
-		RunsTotal.With(prometheus.Labels{
+		runsTotal.With(prometheus.Labels{
 			"drill": r.Name, "provider": r.Provider, "environment": env, "status": status,
 		}).Inc()
 	}

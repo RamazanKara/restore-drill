@@ -7,7 +7,7 @@ drills:
     backup:
       tool: pgbackrest
       stanza: main
-      repo: /var/lib/pgbackrest
+      source: /var/lib/pgbackrest
     restore:
       timeout: 10m
       container:

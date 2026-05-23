@@ -19,6 +19,10 @@ type RunResult struct {
 	BackupAge        string        `json:"backup_age,omitempty"`
 	ValidationPassed bool          `json:"validation_passed"`
 	Error            string        `json:"error,omitempty"`
+	CleanupSkipped   bool          `json:"cleanup_skipped,omitempty"`
+	TargetID         string        `json:"target_id,omitempty"`
+	TargetHost       string        `json:"target_host,omitempty"`
+	TargetPorts      map[int]int   `json:"target_ports,omitempty"`
 	Checks           []CheckResult `json:"checks"`
 }
 
@@ -67,7 +71,7 @@ func Save(path string, run *LastRun) error {
 
 // Load reads the last run results from the state file.
 func Load(path string) (*LastRun, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- state path is controlled by restore-drill.
 	if err != nil {
 		return nil, fmt.Errorf("read state: %w", err)
 	}
@@ -95,7 +99,7 @@ func AppendHistory(run *LastRun) error {
 		return fmt.Errorf("create history dir: %w", err)
 	}
 
-	filename := run.Timestamp.UTC().Format("20060102T150405Z") + ".json"
+	filename := run.Timestamp.UTC().Format("20060102T150405.000000000Z") + ".json"
 	path := filepath.Join(dir, filename)
 
 	data, err := json.MarshalIndent(run, "", "  ")
@@ -122,7 +126,7 @@ func LoadHistory(since time.Time) ([]*LastRun, error) {
 		if e.IsDir() || filepath.Ext(e.Name()) != ".json" {
 			continue
 		}
-		data, err := os.ReadFile(filepath.Join(dir, e.Name()))
+		data, err := os.ReadFile(filepath.Join(dir, e.Name())) // #nosec G304 -- file names come from the state history directory.
 		if err != nil {
 			continue
 		}

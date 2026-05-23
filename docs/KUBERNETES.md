@@ -1,0 +1,62 @@
+# Kubernetes and Helm
+
+The Helm chart deploys restore-drill as a CronJob and runs the CLI with the Kubernetes runtime.
+
+## Install
+
+```bash
+helm install restore-drill deploy/helm/restore-drill \
+  --namespace restore-drill \
+  --create-namespace \
+  --set-file config.inline=drill.yaml
+```
+
+For production, prefer secret-backed environment variables for backup credentials:
+
+```yaml
+env:
+  - name: AWS_ACCESS_KEY_ID
+    valueFrom:
+      secretKeyRef:
+        name: backup-credentials
+        key: access-key-id
+  - name: AWS_SECRET_ACCESS_KEY
+    valueFrom:
+      secretKeyRef:
+        name: backup-credentials
+        key: secret-access-key
+```
+
+## Runtime behavior
+
+- The CronJob pod runs `restore-drill run --runtime=kubernetes`.
+- Restore targets are short-lived pods in the release namespace by default.
+- The chart creates a Role and RoleBinding for pod create/get/list/watch/delete, pod exec, and pod logs.
+- `runtime.namespace` can override where ephemeral restore pods are created.
+- `--no-cleanup` keeps the target pod for manual inspection and records its ID in state/report output.
+
+## Values that matter most
+
+```yaml
+schedule: "0 3 * * *"
+runtime:
+  mode: kubernetes
+  namespace: ""
+config:
+  inline: ""
+  existingConfigMap: ""
+rbac:
+  create: true
+networkPolicy:
+  enabled: false
+```
+
+Enable `networkPolicy` only after adding egress rules for DNS, backup storage, and Pushgateway/webhook targets.
+
+## Image requirements
+
+The restore target image comes from each drill's `restore.container.image`, not from the chart image. It must contain the provider runtime and selected backup tool:
+
+- PostgreSQL: `psql`, `pg_isready`, plus `pgbackrest`, `pg_restore`, or `wal-g` when selected
+- MySQL/MariaDB: `mysql`, `mysqladmin`, plus `xtrabackup` or `mariabackup` when selected
+- Redis: `redis-server`, `redis-cli`

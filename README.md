@@ -1,167 +1,98 @@
 # restore-drill
 
-**Automated backup verification for self-hosted infrastructure.**
+**Automated backup restore verification for self-hosted infrastructure.**
 
-Backups that are never restored are not backups. `restore-drill` continuously proves your recovery works by restoring real backups into ephemeral environments, running validation queries, and publishing RTO/RPO as Prometheus metrics.
+Backups that are never restored are guesses. `restore-drill` restores real backups into ephemeral Docker containers or Kubernetes pods, runs validation checks, records RTO/RPO evidence, and publishes machine-readable output for audits and alerts.
 
 [![CI](https://github.com/RamazanKara/restore-drill/actions/workflows/ci.yml/badge.svg)](https://github.com/RamazanKara/restore-drill/actions)
-[![Go Report Card](https://goreportcard.com/badge/github.com/fluentorbit/restore-drill)](https://goreportcard.com/report/github.com/fluentorbit/restore-drill)
+[![Go Report Card](https://goreportcard.com/badge/github.com/RamazanKara/restore-drill)](https://goreportcard.com/report/github.com/RamazanKara/restore-drill)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/RamazanKara/restore-drill)](https://github.com/RamazanKara/restore-drill/releases)
 
-## The problem
+## What it does
 
-Every team has backups. Almost nobody verifies them regularly.
+1. Creates an ephemeral restore target with Docker or Kubernetes.
+2. Stages a local or S3-compatible backup artifact when needed.
+3. Runs the configured provider restore command.
+4. Executes validation checks against the restored data.
+5. Writes status, history, JSON/HTML reports, webhook notifications, and Prometheus Pushgateway metrics.
 
-- pgBackRest runs nightly — but when was the last time you restored from it?
-- Velero snapshots exist — but can they actually reconstruct your database?
-- Your RTO is "4 hours" in the DR doc — is that a measurement or a guess?
+## Supported restore paths
 
-Compliance frameworks (NIS2, ISO 27001, BSI C5) require **tested** recovery. Not documented. Tested.
+| Provider | Backup tools | Runtime status | Release gate coverage | Notes |
+| --- | --- | --- | --- | --- |
+| PostgreSQL | `pg_dump`, `pg_restore`, `pgbackrest`, `wal-g` | Docker, Kubernetes | Generated Docker fixture covers `pg_dump`. | Restore image must include `psql`, `pg_isready`, and the selected backup tool. |
+| MySQL/MariaDB | `mysqldump`, `xtrabackup`, `mariabackup` | Docker, Kubernetes | Generated Docker fixture covers `mysqldump`. | Restore image must include `mysql`, `mysqladmin`, and the selected physical backup tool. |
+| Redis | RDB, AOF | Docker, Kubernetes | Generated Docker fixture covers AOF; kind smoke covers AOF on Kubernetes. | Restore image must include `redis-server` and `redis-cli`. |
+| Prometheus Pushgateway | metrics push | GA | Enabled through `metrics.prometheus`. |
+| JSON/HTML compliance reports | local history | GA | `report` reads `~/.restore-drill/history`. |
+| Webhooks | JSON POST | GA | Configure per-drill `alerts` with `type: webhook`. |
 
-## What restore-drill does
+Planned providers: standalone S3 object drills, etcd, ClickHouse, MongoDB, Velero, PITR fuzzing, multi-region restore drills, and cost estimation.
 
+## Install
+
+```bash
+go install github.com/RamazanKara/restore-drill/cmd/restore-drill@latest
 ```
-┌─────────────┐     ┌──────────────┐     ┌────────────────┐     ┌──────────────┐
-│ Backup Store│────▶│ Restore Job  │────▶│ Validation     │────▶│ Metrics +    │
-│ (S3, local) │     │ (ephemeral)  │     │ (queries/checks)│     │ Report       │
-└─────────────┘     └──────────────┘     └────────────────┘     └──────────────┘
+
+Release binaries and container images are published from tags:
+
+```bash
+docker pull ghcr.io/ramazankara/restore-drill:latest
 ```
-
-1. **Restore** — Spins up an ephemeral container, pulls the latest backup, restores it
-2. **Validate** — Runs configurable checks: row counts, schema integrity, query correctness, data freshness
-3. **Measure** — Records restore duration (RTO), backup age (RPO), and validation results
-4. **Report** — Publishes Prometheus metrics, sends alerts on failure, generates compliance reports
-
-## Supported backends
-
-| Backend | Backup tool | Status |
-|---------|------------|--------|
-| PostgreSQL | pgBackRest, pg_dump, WAL-G | GA |
-| MySQL/MariaDB | mysqldump, xtrabackup, mariabackup | GA |
-| Redis | RDB snapshots, AOF | GA |
-| S3-compatible | rclone, mc (MinIO client) | Planned |
-| etcd | etcdctl snapshot | Planned |
-| ClickHouse | clickhouse-backup | Planned |
-| MongoDB | mongodump | Planned |
 
 ## Quick start
 
-### CLI
+```bash
+restore-drill validate --config examples/drill.yaml
+restore-drill run --config drill.yaml --runtime docker
+restore-drill run --config drill.yaml --runtime docker --parallel --format json
+restore-drill status
+restore-drill report --last 90 --output compliance-report.html
+```
+
+Incident mode keeps the restore target available for inspection:
 
 ```bash
-# Install
-go install github.com/fluentorbit/restore-drill/cmd/restore-drill@latest
-
-# Run a drill against your PostgreSQL backup
-restore-drill run --config drill.yaml
-
-# Run in parallel with JSON output
-restore-drill run --config drill.yaml --parallel --format json
-
-# Incident mode: restore to a specific point-in-time and keep container running
-restore-drill run --config drill.yaml --target "2024-01-15T10:30:00Z" --no-cleanup
-
-# Check last drill results
-restore-drill status
-
-# Generate compliance report (HTML)
-restore-drill report --last 90 --output compliance-q2.html
-
-# Generate compliance report (JSON, for automation)
-restore-drill report --format json --last 30
+restore-drill run \
+  --config drill.yaml \
+  --target "2026-05-20T14:30:00Z" \
+  --no-cleanup
 ```
 
-### Kubernetes CronJob
+When `--no-cleanup` is set, stdout/JSON/state include the retained container or pod ID, host, and port map.
+
+## Example config
 
 ```yaml
-apiVersion: batch/v1
-kind: CronJob
-metadata:
-  name: restore-drill-postgres
-spec:
-  schedule: "0 3 * * 1"    # Weekly, Monday 3am
-  jobTemplate:
-    spec:
-      template:
-        spec:
-          restartPolicy: Never
-          containers:
-            - name: drill
-              image: ghcr.io/ramazankara/restore-drill:latest
-              args: ["run", "--config", "/etc/drill/config.yaml"]
-              volumeMounts:
-                - name: config
-                  mountPath: /etc/drill
-          volumes:
-            - name: config
-              configMap:
-                name: restore-drill-config
-```
-
-## Configuration
-
-```yaml
-# drill.yaml
 drills:
   - name: production-postgres
     provider: postgres
-    schedule: "0 3 * * 1"          # When to run (cron, or "manual")
     backup:
-      tool: pgbackrest
-      stanza: main
-      repo:
-        type: s3
-        bucket: my-backups
-        endpoint: s3.eu-central-1.amazonaws.com
-        prefix: pgbackrest/
+      tool: pg_dump
+      source: /backups/postgres/latest.sql.gz
     restore:
-      target: latest                # or specific PITR timestamp
+      target: latest
+      timeout: 30m
       container:
         image: postgres:16
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
         resources:
           memory: 2Gi
           cpu: "1"
-      timeout: 30m
     checks:
-      - name: user-count
+      - name: users-exist
         type: query
         sql: "SELECT count(*) FROM users"
         expect: "> 0"
-      - name: data-freshness
-        type: query
-        sql: "SELECT max(updated_at) FROM orders"
-        expect: "age < 25h"         # Data freshness check
-      - name: schema-version
-        type: schema
-        sql: "SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1"
-        expect: ">= 142"
+      - name: required-extensions
+        type: extensions
+        expect: "pgcrypto, uuid-ossp"
     alerts:
-      - type: prometheus            # Push to Pushgateway
-        endpoint: http://pushgateway:9091
       - type: webhook
-        url: https://hooks.slack.com/...
-
-  - name: production-redis
-    provider: redis
-    backup:
-      tool: rdb
-      source:
-        type: s3
-        bucket: my-backups
-        prefix: redis/
-    restore:
-      container:
-        image: redis:7-alpine
-      timeout: 5m
-    checks:
-      - name: key-count
-        type: key_count
-        expect: "> 1000"
-      - name: session-keys
-        type: key_sample
-        keys: ["session:*", "cache:*"]
-        expect: "> 0"
+        url: https://hooks.example.invalid/restore-drill
 
 metrics:
   prometheus:
@@ -170,124 +101,54 @@ metrics:
     labels:
       environment: production
       team: platform
-
-reporting:
-  format: [json, html]
-  output: ./reports/
-  retention: 90d
 ```
+
+See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for the full YAML reference.
+
+## Kubernetes
+
+```bash
+helm install restore-drill deploy/helm/restore-drill \
+  --namespace restore-drill \
+  --create-namespace \
+  --set-file config.inline=drill.yaml
+```
+
+The chart runs the CLI with `--runtime=kubernetes`, creates namespace-scoped RBAC for ephemeral restore pods, and supports ConfigMap/Secret driven configuration. See [docs/KUBERNETES.md](docs/KUBERNETES.md).
+
+For production rollout guidance, see [docs/PRODUCTION.md](docs/PRODUCTION.md).
 
 ## Metrics
 
 All metrics are prefixed with `restore_drill_`.
 
 | Metric | Type | Description |
-|--------|------|-------------|
-| `restore_drill_duration_seconds` | Gauge | Time from start to validated restore |
-| `restore_drill_backup_age_seconds` | Gauge | Age of the most recent backup used |
-| `restore_drill_validation_passed` | Gauge | 1 if all checks passed, 0 otherwise |
-| `restore_drill_validation_checks_total` | Counter | Number of validation checks executed |
-| `restore_drill_validation_checks_failed` | Counter | Number of validation checks failed |
-| `restore_drill_last_success_timestamp` | Gauge | Unix timestamp of last successful drill |
-| `restore_drill_runs_total` | Counter | Total drill executions (label: status) |
+| --- | --- | --- |
+| `restore_drill_duration_seconds` | Gauge | Time from start to validated restore. |
+| `restore_drill_backup_age_seconds` | Gauge | Age of the backup used. |
+| `restore_drill_validation_passed` | Gauge | `1` when all checks passed. |
+| `restore_drill_validation_checks_total` | Counter | Checks executed in the current push. |
+| `restore_drill_validation_checks_failed` | Counter | Failed checks in the current push. |
+| `restore_drill_last_success_timestamp` | Gauge | Unix timestamp of the last successful drill. |
+| `restore_drill_runs_total` | Counter | Runs by status. |
 
-### Example alert rules
-
-```yaml
-groups:
-  - name: restore-drill
-    rules:
-      - alert: RestoreDrillFailed
-        expr: restore_drill_validation_passed == 0
-        for: 0m
-        labels:
-          severity: critical
-        annotations:
-          summary: "Restore drill failed for {{ $labels.drill }}"
-
-      - alert: RestoreDrillStale
-        expr: time() - restore_drill_last_success_timestamp > 7 * 86400
-        for: 1h
-        labels:
-          severity: warning
-        annotations:
-          summary: "No successful restore drill in 7 days for {{ $labels.drill }}"
-
-      - alert: RestoreDrillSlow
-        expr: restore_drill_duration_seconds > 1800
-        for: 0m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Restore drill took > 30min for {{ $labels.drill }}"
-```
-
-## Compliance output
-
-Generate audit-ready reports:
+## Development
 
 ```bash
-restore-drill report --last 90 --output compliance-q2.html
-```
-
-The report includes:
-- Executive summary with success rate, avg/max RTO
-- Drill execution history with timestamps
-- RTO measurements per drill
-- RPO measurements (backup freshness at time of test)
-- Pass/fail status for each validation check
-- Compliance control mapping
-
-Mapped controls: ISO 27001:2022 A.8.13, NIS2 Art. 21(2)(c), BSI C5 OPS-04/OPS-05, SOC 2 A1.2.
-
-## Architecture
-
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full component design.
-
-## Helm chart
-
-```bash
-helm install restore-drill deploy/helm/ \
-  --namespace restore-drill \
-  --create-namespace \
-  --set-file config=drill.yaml
-```
-
-See [deploy/helm/](deploy/helm/) for values reference.
-
-## Roadmap
-
-- [x] PostgreSQL provider (pgBackRest, pg_dump, WAL-G)
-- [x] MySQL provider (mysqldump, xtrabackup, mariabackup)
-- [x] Redis provider (RDB, AOF)
-- [x] Prometheus metrics + Pushgateway
-- [x] JSON output format
-- [x] Helm chart (CronJob)
-- [ ] S3 provider (rclone)
-- [ ] etcd provider (etcdctl)
-- [ ] ClickHouse provider
-- [ ] MongoDB provider
-- [ ] Velero integration (restore from Velero snapshots)
-- [ ] PITR fuzzing (restore to random point, validate consistency)
-- [ ] Multi-region drill (restore in a different region)
-- [ ] Cost estimation (ephemeral compute cost per drill)
-
-## Contributing
-
-Contributions welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
-
-```bash
-git clone https://github.com/fluentorbit/restore-drill.git
-cd restore-drill
 make build
-make test
+make test-unit
 make lint
+make check-examples
 ```
+
+`make verify` also runs Helm and GoReleaser checks and requires those tools on `PATH`. Docker integration tests are opt-in and cover generated `pg_dump`, `mysqldump`, and Redis AOF fixtures:
+
+```bash
+RESTORE_DRILL_INTEGRATION=1 go test -race -count=1 -timeout=10m ./test/integration/...
+```
+
+Release details are in [docs/RELEASE.md](docs/RELEASE.md).
 
 ## License
 
-Apache License 2.0 — see [LICENSE](LICENSE).
-
----
-
-Built by [FluentOrbit](https://fluentorbit.de) — platform engineering for self-hosted infrastructure.
+Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).

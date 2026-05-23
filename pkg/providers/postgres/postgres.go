@@ -2,17 +2,14 @@
 package postgres
 
 import (
-	"archive/tar"
-	"bytes"
 	"context"
 	"fmt"
 	"log/slog"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/fluentorbit/restore-drill/pkg/engine"
+	"github.com/RamazanKara/restore-drill/pkg/backup"
+	"github.com/RamazanKara/restore-drill/pkg/engine"
 )
 
 // Provider implements engine.Provider for PostgreSQL.
@@ -25,6 +22,24 @@ func New() *Provider {
 
 func (p *Provider) Name() string {
 	return "postgres"
+}
+
+func (p *Provider) Preflight(ctx context.Context, rt engine.Runtime, cfg engine.BackupConfig, target engine.Container, checks []engine.Check) error {
+	required := []string{"psql", "pg_isready"}
+	switch cfg.Tool {
+	case "pgbackrest":
+		required = append(required, "pgbackrest")
+	case "pg_restore":
+		required = append(required, "pg_restore")
+	case "wal-g", "walg":
+		required = append(required, "wal-g")
+	}
+	for _, cmd := range required {
+		if err := commandExists(ctx, rt, target, cmd); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (p *Provider) Restore(ctx context.Context, rt engine.Runtime, cfg engine.BackupConfig, target engine.Container) (*engine.RestoreResult, error) {
@@ -63,6 +78,8 @@ func (p *Provider) Validate(ctx context.Context, rt engine.Runtime, target engin
 			actual, err = p.execSQL(ctx, rt, target, check.SQL)
 		case "freshness":
 			actual, err = p.execSQL(ctx, rt, target, check.SQL)
+		case "extensions":
+			actual, err = p.execSQL(ctx, rt, target, "SELECT string_agg(extname, ', ' ORDER BY extname) FROM pg_extension")
 		default:
 			err = fmt.Errorf("postgres: unsupported check type %q", check.Type)
 		}
@@ -132,13 +149,40 @@ func (p *Provider) restorePgBackRest(ctx context.Context, rt engine.Runtime, cfg
 	// Stop postgres before restore
 	_, _ = rt.Exec(ctx, target, []string{"pg_ctl", "stop", "-D", "/var/lib/postgresql/data", "-m", "fast"})
 
-	// Run pgbackrest restore
+	repoPath := cfg.Source
+	if cfg.Source != "" {
+		staged, err := backup.Stage(ctx, rt, target, cfg)
+		if err != nil {
+			return nil, err
+		}
+		repoPath = staged.Path
+	}
+
+	if _, err := rt.Exec(ctx, target, []string{"sh", "-c", "rm -rf /var/lib/postgresql/data/*"}); err != nil {
+		return nil, fmt.Errorf("clear postgres data directory: %w", err)
+	}
+
 	cmd := []string{"pgbackrest", "restore", "--stanza", cfg.Stanza, "--delta"}
 	if cfg.Repo.Type != "" {
-		cmd = append(cmd, "--repo-type", cfg.Repo.Type)
+		cmd = append(cmd, "--repo1-type", cfg.Repo.Type)
+		if cfg.Repo.Bucket != "" {
+			cmd = append(cmd, "--repo1-s3-bucket", cfg.Repo.Bucket)
+		}
+		if cfg.Repo.Endpoint != "" {
+			cmd = append(cmd, "--repo1-s3-endpoint", cfg.Repo.Endpoint)
+		}
+		if cfg.Repo.Region != "" {
+			cmd = append(cmd, "--repo1-s3-region", cfg.Repo.Region)
+		}
+		if cfg.Repo.Prefix != "" {
+			cmd = append(cmd, "--repo1-path", cfg.Repo.Prefix)
+		}
 	}
-	if cfg.Source != "" {
-		cmd = append(cmd, "--repo-path", cfg.Source)
+	if repoPath != "" {
+		cmd = append(cmd, "--repo1-path", repoPath)
+	}
+	if cfg.Target != "" && cfg.Target != "latest" {
+		cmd = append(cmd, "--type", "time", "--target", cfg.Target)
 	}
 
 	out, err := rt.Exec(ctx, target, cmd)
@@ -174,47 +218,24 @@ func (p *Provider) restorePgDump(ctx context.Context, rt engine.Runtime, cfg eng
 		return nil, err
 	}
 
-	// Copy the dump file into the container
-	destPath := "/tmp/restore.sql"
-	if cfg.Source != "" {
-		data, err := os.ReadFile(cfg.Source)
-		if err != nil {
-			return nil, fmt.Errorf("read source file %s: %w", cfg.Source, err)
-		}
-
-		// Create a tar archive containing the file (Docker CopyTo expects tar)
-		var buf bytes.Buffer
-		tw := tar.NewWriter(&buf)
-		hdr := &tar.Header{
-			Name: filepath.Base(destPath),
-			Mode: 0644,
-			Size: int64(len(data)),
-		}
-		if err := tw.WriteHeader(hdr); err != nil {
-			return nil, fmt.Errorf("tar header: %w", err)
-		}
-		if _, err := tw.Write(data); err != nil {
-			return nil, fmt.Errorf("tar write: %w", err)
-		}
-		if err := tw.Close(); err != nil {
-			return nil, fmt.Errorf("tar close: %w", err)
-		}
-
-		if err := rt.CopyTo(ctx, target, "/tmp/", &buf); err != nil {
-			return nil, fmt.Errorf("copy dump to container: %w", err)
-		}
-	}
-
-	// Use psql for plain SQL dumps
-	cmd := []string{"psql", "-U", "postgres", "-f", destPath}
-	out, err := rt.Exec(ctx, target, cmd)
+	staged, err := backup.Stage(ctx, rt, target, cfg)
 	if err != nil {
-		// psql may exit non-zero on warnings; check if output contains fatal errors
-		outStr := string(out)
-		if strings.Contains(outStr, "FATAL") || strings.Contains(outStr, "could not") {
-			return nil, fmt.Errorf("psql restore: %w\noutput: %s", err, outStr)
-		}
-		slog.Warn("psql restore completed with warnings", "output", outStr)
+		return nil, err
+	}
+	destPath := staged.Path
+
+	var cmd []string
+	switch {
+	case cfg.Tool == "pg_restore":
+		cmd = []string{"pg_restore", "-U", "postgres", "-d", "postgres", "--clean", "--if-exists", destPath}
+	case strings.HasSuffix(destPath, ".gz"):
+		cmd = []string{"sh", "-c", fmt.Sprintf("gzip -dc %s | psql -U postgres -v ON_ERROR_STOP=1", shellQuote(destPath))}
+	default:
+		cmd = []string{"psql", "-U", "postgres", "-v", "ON_ERROR_STOP=1", "-f", destPath}
+	}
+	out, err := p.execWhenStable(ctx, rt, target, cmd)
+	if err != nil {
+		return nil, fmt.Errorf("postgres dump restore: %w\noutput: %s", err, string(out))
 	}
 
 	ts, _ := p.getBackupTimestamp(ctx, rt, target)
@@ -236,15 +257,19 @@ func (p *Provider) restoreWalG(ctx context.Context, rt engine.Runtime, cfg engin
 	// Stop postgres
 	_, _ = rt.Exec(ctx, target, []string{"pg_ctl", "stop", "-D", "/var/lib/postgresql/data", "-m", "fast"})
 
-	// Restore with wal-g
 	cmd := []string{"wal-g", "backup-fetch", "/var/lib/postgresql/data", "LATEST"}
 	out, err := rt.Exec(ctx, target, cmd)
 	if err != nil {
 		return nil, fmt.Errorf("wal-g backup-fetch: %w\noutput: %s", err, string(out))
 	}
 
-	// Create recovery signal for WAL replay
-	_, _ = rt.Exec(ctx, target, []string{"touch", "/var/lib/postgresql/data/recovery.signal"})
+	recoveryConfig := "touch /var/lib/postgresql/data/recovery.signal"
+	if cfg.Target != "" && cfg.Target != "latest" {
+		recoveryConfig += fmt.Sprintf(" && printf \"restore_command = 'wal-g wal-fetch %%f %%p'\\nrecovery_target_time = '%s'\\n\" >> /var/lib/postgresql/data/postgresql.auto.conf", shellEscape(cfg.Target))
+	}
+	if _, err := rt.Exec(ctx, target, []string{"sh", "-c", recoveryConfig}); err != nil {
+		return nil, fmt.Errorf("configure wal-g recovery: %w", err)
+	}
 
 	// Start postgres
 	_, err = rt.Exec(ctx, target, []string{"pg_ctl", "start", "-D", "/var/lib/postgresql/data", "-w"})
@@ -267,4 +292,63 @@ func (p *Provider) restoreWalG(ctx context.Context, rt engine.Runtime, cfg engin
 // getBackupTimestamp queries pg for the latest checkpoint/restore timestamp.
 func (p *Provider) getBackupTimestamp(ctx context.Context, rt engine.Runtime, target engine.Container) (string, error) {
 	return p.execSQL(ctx, rt, target, "SELECT pg_postmaster_start_time()::text")
+}
+
+func (p *Provider) execWhenStable(ctx context.Context, rt engine.Runtime, target engine.Container, cmd []string) ([]byte, error) {
+	deadline := time.Now().Add(60 * time.Second)
+	for {
+		if err := p.waitReady(ctx, rt, target); err != nil {
+			return nil, err
+		}
+
+		out, err := rt.Exec(ctx, target, cmd)
+		if err == nil {
+			return out, nil
+		}
+		if !isConnectionStartupError(err, out) || time.Now().After(deadline) {
+			return out, err
+		}
+
+		slog.Debug("postgres command hit startup race, retrying", "error", err)
+		if err := sleepContext(ctx, 500*time.Millisecond); err != nil {
+			return out, err
+		}
+	}
+}
+
+func isConnectionStartupError(err error, out []byte) bool {
+	msg := strings.ToLower(err.Error() + "\n" + string(out))
+	return strings.Contains(msg, "connection to server") &&
+		(strings.Contains(msg, "no such file or directory") ||
+			strings.Contains(msg, "connection refused") ||
+			strings.Contains(msg, "could not connect") ||
+			strings.Contains(msg, "starting up") ||
+			strings.Contains(msg, "no response"))
+}
+
+func sleepContext(ctx context.Context, d time.Duration) error {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+func commandExists(ctx context.Context, rt engine.Runtime, target engine.Container, name string) error {
+	if _, err := rt.Exec(ctx, target, []string{"sh", "-c", "command -v " + shellQuote(name)}); err != nil {
+		return fmt.Errorf("required command %q not found in restore image", name)
+	}
+	return nil
+}
+
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
+}
+
+func shellEscape(s string) string {
+	return strings.ReplaceAll(s, "'", "''")
 }

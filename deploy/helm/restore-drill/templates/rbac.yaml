@@ -1,0 +1,32 @@
+{{- if .Values.rbac.create }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "restore-drill.fullname" . }}
+  namespace: {{ .Values.runtime.namespace | default .Release.Namespace }}
+  labels:
+    {{- include "restore-drill.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["create", "get", "list", "watch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods/exec", "pods/log"]
+    verbs: ["create", "get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "restore-drill.fullname" . }}
+  namespace: {{ .Values.runtime.namespace | default .Release.Namespace }}
+  labels:
+    {{- include "restore-drill.labels" . | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "restore-drill.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "restore-drill.fullname" . }}
+{{- end }}

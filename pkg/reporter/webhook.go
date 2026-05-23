@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/fluentorbit/restore-drill/pkg/engine"
+	"github.com/RamazanKara/restore-drill/pkg/engine"
 )
 
 // Webhook sends drill results as JSON to an HTTP endpoint.
@@ -66,6 +66,10 @@ func (w *Webhook) Report(ctx context.Context, results []engine.DrillResult) erro
 			Duration:         r.Duration.String(),
 			DurationMs:       r.Duration.Milliseconds(),
 			ValidationPassed: r.ValidationPassed,
+			CleanupSkipped:   r.CleanupSkipped,
+			TargetID:         r.TargetID,
+			TargetHost:       r.TargetHost,
+			TargetPorts:      r.TargetPorts,
 		}
 		if r.Error != nil || !r.ValidationPassed {
 			jr.Status = "fail"
@@ -116,16 +120,6 @@ func (w *Webhook) Report(ctx context.Context, results []engine.DrillResult) erro
 		return fmt.Errorf("marshal webhook payload: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, w.URL, bytes.NewReader(body))
-	if err != nil {
-		return fmt.Errorf("create webhook request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "restore-drill/1.0")
-	for k, v := range w.Headers {
-		req.Header.Set(k, v)
-	}
-
 	client := &http.Client{Timeout: w.Timeout}
 
 	// Retry up to 3 times on 5xx errors.
@@ -135,12 +129,24 @@ func (w *Webhook) Report(ctx context.Context, results []engine.DrillResult) erro
 			time.Sleep(time.Duration(attempt) * 2 * time.Second)
 		}
 
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, w.URL, bytes.NewReader(body))
+		if err != nil {
+			return fmt.Errorf("create webhook request: %w", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("User-Agent", "restore-drill/1.0")
+		for k, v := range w.Headers {
+			req.Header.Set(k, v)
+		}
+
 		resp, err := client.Do(req)
 		if err != nil {
 			lastErr = fmt.Errorf("webhook request: %w", err)
 			continue
 		}
-		resp.Body.Close()
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			slog.Warn("failed to close webhook response", "error", closeErr)
+		}
 
 		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 			slog.Info("webhook delivered", "url", w.URL, "status", resp.StatusCode)

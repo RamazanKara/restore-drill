@@ -8,7 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fluentorbit/restore-drill/pkg/engine"
+	"github.com/RamazanKara/restore-drill/pkg/backup"
+	"github.com/RamazanKara/restore-drill/pkg/engine"
 )
 
 // Provider implements engine.Provider for Redis.
@@ -22,14 +23,18 @@ func (p *Provider) Name() string {
 	return "redis"
 }
 
+func (p *Provider) Preflight(ctx context.Context, rt engine.Runtime, cfg engine.BackupConfig, target engine.Container, checks []engine.Check) error {
+	for _, cmd := range []string{"redis-server", "redis-cli"} {
+		if err := commandExists(ctx, rt, target, cmd); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (p *Provider) Restore(ctx context.Context, rt engine.Runtime, cfg engine.BackupConfig, target engine.Container) (*engine.RestoreResult, error) {
 	start := time.Now()
 	slog.Info("restoring redis", "tool", cfg.Tool, "source", cfg.Source)
-
-	// Wait for Redis to be ready
-	if err := p.waitReady(ctx, rt, target); err != nil {
-		return nil, err
-	}
 
 	switch cfg.Tool {
 	case "rdb":
@@ -65,14 +70,26 @@ func (p *Provider) Validate(ctx context.Context, rt engine.Runtime, target engin
 		case "key_sample":
 			// Check if specific keys exist
 			for _, key := range check.Keys {
-				out, kerr := p.execRedis(ctx, rt, target, "EXISTS", key)
-				if kerr != nil {
-					err = kerr
-					break
-				}
-				if strings.TrimSpace(out) == "0" {
-					actual = "false"
-					break
+				if hasGlobMeta(key) {
+					out, kerr := p.execRedis(ctx, rt, target, "KEYS", key)
+					if kerr != nil {
+						err = kerr
+						break
+					}
+					if strings.TrimSpace(out) == "" {
+						actual = "false"
+						break
+					}
+				} else {
+					out, kerr := p.execRedis(ctx, rt, target, "EXISTS", key)
+					if kerr != nil {
+						err = kerr
+						break
+					}
+					if strings.TrimSpace(out) == "0" {
+						actual = "false"
+						break
+					}
 				}
 			}
 			if err == nil && actual == "" {
@@ -139,20 +156,20 @@ func (p *Provider) waitReady(ctx context.Context, rt engine.Runtime, target engi
 }
 
 func (p *Provider) restoreRDB(ctx context.Context, rt engine.Runtime, cfg engine.BackupConfig, target engine.Container, start time.Time) (*engine.RestoreResult, error) {
-	// Stop redis, copy RDB file, restart
-	_, _ = rt.Exec(ctx, target, []string{"redis-cli", "SHUTDOWN", "NOSAVE"})
-	time.Sleep(500 * time.Millisecond)
-
-	// Copy RDB file to data directory
-	if cfg.Source != "" {
-		_, err := rt.Exec(ctx, target, []string{"cp", cfg.Source, "/data/dump.rdb"})
-		if err != nil {
-			return nil, fmt.Errorf("redis: copy RDB file: %w", err)
-		}
+	staged, err := backup.Stage(ctx, rt, target, cfg)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := rt.Exec(ctx, target, []string{"mkdir", "-p", "/data"}); err != nil {
+		return nil, fmt.Errorf("redis: create data dir: %w", err)
+	}
+	if _, err := rt.Exec(ctx, target, []string{"cp", staged.Path, "/data/dump.rdb"}); err != nil {
+		return nil, fmt.Errorf("redis: copy RDB file: %w", err)
 	}
 
-	// Start redis again (it loads RDB on startup)
-	_, _ = rt.Exec(ctx, target, []string{"redis-server", "--daemonize", "yes", "--dir", "/data"})
+	if _, err := rt.Exec(ctx, target, []string{"redis-server", "--daemonize", "yes", "--dir", "/data"}); err != nil {
+		return nil, fmt.Errorf("redis: start server: %w", err)
+	}
 
 	if err := p.waitReady(ctx, rt, target); err != nil {
 		return nil, err
@@ -168,18 +185,20 @@ func (p *Provider) restoreRDB(ctx context.Context, rt engine.Runtime, cfg engine
 }
 
 func (p *Provider) restoreAOF(ctx context.Context, rt engine.Runtime, cfg engine.BackupConfig, target engine.Container, start time.Time) (*engine.RestoreResult, error) {
-	// Stop redis, copy AOF file, restart with AOF enabled
-	_, _ = rt.Exec(ctx, target, []string{"redis-cli", "SHUTDOWN", "NOSAVE"})
-	time.Sleep(500 * time.Millisecond)
-
-	if cfg.Source != "" {
-		_, err := rt.Exec(ctx, target, []string{"cp", cfg.Source, "/data/appendonly.aof"})
-		if err != nil {
-			return nil, fmt.Errorf("redis: copy AOF file: %w", err)
-		}
+	staged, err := backup.Stage(ctx, rt, target, cfg)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := rt.Exec(ctx, target, []string{"mkdir", "-p", "/data"}); err != nil {
+		return nil, fmt.Errorf("redis: create data dir: %w", err)
+	}
+	if _, err := rt.Exec(ctx, target, []string{"cp", staged.Path, "/data/appendonly.aof"}); err != nil {
+		return nil, fmt.Errorf("redis: copy AOF file: %w", err)
 	}
 
-	_, _ = rt.Exec(ctx, target, []string{"redis-server", "--daemonize", "yes", "--dir", "/data", "--appendonly", "yes"})
+	if _, err := rt.Exec(ctx, target, []string{"redis-server", "--daemonize", "yes", "--dir", "/data", "--appendonly", "yes"}); err != nil {
+		return nil, fmt.Errorf("redis: start server: %w", err)
+	}
 
 	if err := p.waitReady(ctx, rt, target); err != nil {
 		return nil, err
@@ -208,4 +227,19 @@ func extractDBSize(s string) string {
 		}
 	}
 	return s
+}
+
+func hasGlobMeta(s string) bool {
+	return strings.ContainsAny(s, "*?[")
+}
+
+func commandExists(ctx context.Context, rt engine.Runtime, target engine.Container, name string) error {
+	if _, err := rt.Exec(ctx, target, []string{"sh", "-c", "command -v " + shellQuote(name)}); err != nil {
+		return fmt.Errorf("required command %q not found in restore image", name)
+	}
+	return nil
+}
+
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
 }

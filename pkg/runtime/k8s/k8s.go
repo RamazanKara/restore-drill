@@ -6,11 +6,9 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net"
-	"strconv"
 	"time"
 
-	"github.com/fluentorbit/restore-drill/pkg/engine"
+	"github.com/RamazanKara/restore-drill/pkg/engine"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -92,6 +90,9 @@ func (r *Runtime) Create(ctx context.Context, spec engine.ContainerSpec) (engine
 	containerPorts := make([]corev1.ContainerPort, 0, len(spec.Ports))
 	portMap := make(map[int]int, len(spec.Ports))
 	for _, p := range spec.Ports {
+		if p <= 0 || p > 65535 {
+			return nil, fmt.Errorf("invalid container port %d", p)
+		}
 		containerPorts = append(containerPorts, corev1.ContainerPort{ContainerPort: int32(p)})
 		portMap[p] = p
 	}
@@ -103,7 +104,10 @@ func (r *Runtime) Create(ctx context.Context, spec engine.ContainerSpec) (engine
 		}
 	}
 	if spec.CPULimit > 0 {
-		resources.Limits[corev1.ResourceCPU] = *resource.NewMilliQuantity(spec.CPULimit, resource.DecimalSI)
+		if resources.Limits == nil {
+			resources.Limits = corev1.ResourceList{}
+		}
+		resources.Limits[corev1.ResourceCPU] = *resource.NewMilliQuantity(spec.CPULimit/1_000_000, resource.DecimalSI)
 	}
 
 	podSpec := &corev1.Pod{
@@ -155,14 +159,6 @@ func (r *Runtime) Create(ctx context.Context, spec engine.ContainerSpec) (engine
 		namespace: r.namespace,
 		podIP:     running.Status.PodIP,
 		ports:     portMap,
-	}
-
-	// Wait for the first port to accept connections.
-	if len(spec.Ports) > 0 {
-		addr := net.JoinHostPort(p.podIP, strconv.Itoa(spec.Ports[0]))
-		if err := waitTCP(ctx, addr, 60*time.Second); err != nil {
-			slog.Warn("port not ready, proceeding anyway", "addr", addr, "error", err)
-		}
 	}
 
 	return p, nil
@@ -269,23 +265,4 @@ func (r *Runtime) waitPodReady(ctx context.Context, name string) error {
 		}
 		return false, nil
 	})
-}
-
-// waitTCP polls a TCP address until it accepts connections.
-func waitTCP(ctx context.Context, addr string, timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-		conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
-		if err == nil {
-			conn.Close()
-			return nil
-		}
-		time.Sleep(time.Second)
-	}
-	return fmt.Errorf("timeout waiting for %s", addr)
 }

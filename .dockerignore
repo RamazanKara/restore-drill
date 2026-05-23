@@ -1,0 +1,12 @@
+.git
+.github
+bin
+dist
+reports
+plan
+*.env
+.DS_Store
+Dockerfile
+*.md
+docs
+test

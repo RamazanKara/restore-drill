@@ -21,10 +21,13 @@ func EvalExpression(expect, actual string) (bool, error) {
 
 	// Boolean
 	if expect == "true" {
-		return actual == "true" || actual == "1" || actual == "t", nil
+		return isTruthy(actual), nil
 	}
 	if expect == "false" {
 		return actual == "false" || actual == "0" || actual == "f", nil
+	}
+	if expect == "exists" {
+		return isTruthy(actual), nil
 	}
 
 	// Age expression: "age < 2h", "age < 30m"
@@ -42,8 +45,21 @@ func EvalExpression(expect, actual string) (bool, error) {
 		return result, err
 	}
 
+	if strings.Contains(expect, ",") {
+		return evalListContains(expect, actual), nil
+	}
+
 	// Fallback: exact string match
 	return expect == actual, nil
+}
+
+func isTruthy(actual string) bool {
+	switch strings.ToLower(strings.TrimSpace(actual)) {
+	case "true", "1", "t", "yes", "y", "exists":
+		return true
+	default:
+		return false
+	}
 }
 
 var numericPattern = regexp.MustCompile(`^(>=|<=|>|<|==|!=)\s*(.+)$`)
@@ -158,4 +174,24 @@ func evalContains(expect, actual string) (bool, error) {
 		return false, fmt.Errorf("invalid contains expression %q (use: contains \"text\")", expect)
 	}
 	return strings.Contains(actual, parts[1]), nil
+}
+
+func evalListContains(expect, actual string) bool {
+	actualSet := make(map[string]struct{})
+	for _, item := range strings.Split(actual, ",") {
+		item = strings.TrimSpace(item)
+		if item != "" {
+			actualSet[item] = struct{}{}
+		}
+	}
+	for _, item := range strings.Split(expect, ",") {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		if _, ok := actualSet[item]; !ok {
+			return false
+		}
+	}
+	return true
 }

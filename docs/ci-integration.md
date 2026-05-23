@@ -28,7 +28,7 @@ jobs:
           sudo mv restore-drill /usr/local/bin/
 
       - name: Run backup verification
-        run: restore-drill run --config drill.yaml --format json
+        run: restore-drill run --config drill.yaml --runtime docker --format json
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -60,7 +60,7 @@ backup-drill:
     - curl -sSfL https://github.com/RamazanKara/restore-drill/releases/latest/download/restore-drill_linux_amd64.tar.gz | tar xz
     - mv restore-drill /usr/local/bin/
   script:
-    - restore-drill run --config drill.yaml
+    - restore-drill run --config drill.yaml --runtime docker
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -90,7 +90,7 @@ spec:
       containers:
         - name: drill
           image: ghcr.io/ramazankara/restore-drill:latest
-          args: ["run", "--config", "/config/drill.yaml"]
+          args: ["run", "--config", "/config/drill.yaml", "--runtime", "kubernetes"]
           volumeMounts:
             - name: config
               mountPath: /config
@@ -126,7 +126,7 @@ spec:
           containers:
             - name: drill
               image: ghcr.io/ramazankara/restore-drill:latest
-              args: ["run", "--config", "/config/drill.yaml"]
+              args: ["run", "--config", "/config/drill.yaml", "--runtime", "kubernetes"]
               volumeMounts:
                 - name: config
                   mountPath: /config

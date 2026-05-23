@@ -8,7 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fluentorbit/restore-drill/pkg/engine"
+	"github.com/RamazanKara/restore-drill/pkg/backup"
+	"github.com/RamazanKara/restore-drill/pkg/engine"
 )
 
 // Provider implements engine.Provider for MySQL/MariaDB.
@@ -20,6 +21,22 @@ func New() *Provider {
 
 func (p *Provider) Name() string {
 	return "mysql"
+}
+
+func (p *Provider) Preflight(ctx context.Context, rt engine.Runtime, cfg engine.BackupConfig, target engine.Container, checks []engine.Check) error {
+	required := []string{"mysql", "mysqladmin"}
+	switch cfg.Tool {
+	case "xtrabackup":
+		required = append(required, "xtrabackup")
+	case "mariabackup":
+		required = append(required, "mariabackup")
+	}
+	for _, cmd := range required {
+		if err := commandExists(ctx, rt, target, cmd); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (p *Provider) Restore(ctx context.Context, rt engine.Runtime, cfg engine.BackupConfig, target engine.Container) (*engine.RestoreResult, error) {
@@ -52,7 +69,7 @@ func (p *Provider) Validate(ctx context.Context, rt engine.Runtime, target engin
 		var err error
 
 		switch check.Type {
-		case "query", "row_count", "schema", "freshness":
+		case "query", "sql", "row_count", "schema", "freshness":
 			actual, err = p.execSQL(ctx, rt, target, check.SQL)
 		default:
 			err = fmt.Errorf("mysql: unsupported check type %q", check.Type)
@@ -116,8 +133,17 @@ func (p *Provider) restoreMysqldump(ctx context.Context, rt engine.Runtime, cfg 
 		return nil, err
 	}
 
-	// Restore: pipe SQL dump through mysql client
-	cmd := []string{"sh", "-c", fmt.Sprintf("mysql -u root < %s", cfg.Source)}
+	staged, err := backup.Stage(ctx, rt, target, cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	restoreCmd := fmt.Sprintf("mysql -u root < %s", shellQuote(staged.Path))
+	if strings.HasSuffix(staged.Path, ".gz") {
+		restoreCmd = fmt.Sprintf("gzip -dc %s | mysql -u root", shellQuote(staged.Path))
+	}
+
+	cmd := []string{"sh", "-c", restoreCmd}
 	out, err := rt.Exec(ctx, target, cmd)
 	if err != nil {
 		return nil, fmt.Errorf("mysql restore: %w\noutput: %s", err, string(out))
@@ -130,16 +156,23 @@ func (p *Provider) restoreMysqldump(ctx context.Context, rt engine.Runtime, cfg 
 
 func (p *Provider) restoreXtrabackup(ctx context.Context, rt engine.Runtime, cfg engine.BackupConfig, target engine.Container, start time.Time) (*engine.RestoreResult, error) {
 	slog.Info("restoring via xtrabackup", "source", cfg.Source)
+	staged, err := backup.Stage(ctx, rt, target, cfg)
+	if err != nil {
+		return nil, err
+	}
 
 	// Prepare the backup
-	cmd := []string{"xtrabackup", "--prepare", "--target-dir", cfg.Source}
+	cmd := []string{"xtrabackup", "--prepare", "--target-dir", staged.Path}
 	out, err := rt.Exec(ctx, target, cmd)
 	if err != nil {
 		return nil, fmt.Errorf("xtrabackup prepare: %w\noutput: %s", err, string(out))
 	}
 
+	_, _ = rt.Exec(ctx, target, []string{"mysqladmin", "-u", "root", "shutdown"})
+	_, _ = rt.Exec(ctx, target, []string{"sh", "-c", "rm -rf /var/lib/mysql/*"})
+
 	// Copy back
-	cmd = []string{"xtrabackup", "--copy-back", "--target-dir", cfg.Source, "--datadir", "/var/lib/mysql"}
+	cmd = []string{"xtrabackup", "--copy-back", "--target-dir", staged.Path, "--datadir", "/var/lib/mysql"}
 	out, err = rt.Exec(ctx, target, cmd)
 	if err != nil {
 		return nil, fmt.Errorf("xtrabackup copy-back: %w\noutput: %s", err, string(out))
@@ -149,9 +182,8 @@ func (p *Provider) restoreXtrabackup(ctx context.Context, rt engine.Runtime, cfg
 	_, _ = rt.Exec(ctx, target, []string{"chown", "-R", "mysql:mysql", "/var/lib/mysql"})
 
 	// Start MySQL
-	_, err = rt.Exec(ctx, target, []string{"mysqld_safe", "--user=mysql"})
-	if err != nil {
-		slog.Warn("mysqld_safe returned", "error", err)
+	if _, err = rt.Exec(ctx, target, []string{"sh", "-c", "mysqld_safe --user=mysql >/tmp/mysqld_safe.log 2>&1 &"}); err != nil {
+		return nil, fmt.Errorf("start mysql after xtrabackup restore: %w", err)
 	}
 
 	if err := p.waitReady(ctx, rt, target); err != nil {
@@ -165,22 +197,33 @@ func (p *Provider) restoreXtrabackup(ctx context.Context, rt engine.Runtime, cfg
 
 func (p *Provider) restoreMariabackup(ctx context.Context, rt engine.Runtime, cfg engine.BackupConfig, target engine.Container, start time.Time) (*engine.RestoreResult, error) {
 	slog.Info("restoring via mariabackup", "source", cfg.Source)
+	staged, err := backup.Stage(ctx, rt, target, cfg)
+	if err != nil {
+		return nil, err
+	}
 
 	// Prepare
-	cmd := []string{"mariabackup", "--prepare", "--target-dir", cfg.Source}
+	cmd := []string{"mariabackup", "--prepare", "--target-dir", staged.Path}
 	out, err := rt.Exec(ctx, target, cmd)
 	if err != nil {
 		return nil, fmt.Errorf("mariabackup prepare: %w\noutput: %s", err, string(out))
 	}
 
 	// Copy back
-	cmd = []string{"mariabackup", "--copy-back", "--target-dir", cfg.Source, "--datadir", "/var/lib/mysql"}
+	_, _ = rt.Exec(ctx, target, []string{"mysqladmin", "-u", "root", "shutdown"})
+	_, _ = rt.Exec(ctx, target, []string{"sh", "-c", "rm -rf /var/lib/mysql/*"})
+
+	cmd = []string{"mariabackup", "--copy-back", "--target-dir", staged.Path, "--datadir", "/var/lib/mysql"}
 	out, err = rt.Exec(ctx, target, cmd)
 	if err != nil {
 		return nil, fmt.Errorf("mariabackup copy-back: %w\noutput: %s", err, string(out))
 	}
 
 	_, _ = rt.Exec(ctx, target, []string{"chown", "-R", "mysql:mysql", "/var/lib/mysql"})
+
+	if _, err = rt.Exec(ctx, target, []string{"sh", "-c", "mysqld_safe --user=mysql >/tmp/mysqld_safe.log 2>&1 &"}); err != nil {
+		return nil, fmt.Errorf("start mysql after mariabackup restore: %w", err)
+	}
 
 	if err := p.waitReady(ctx, rt, target); err != nil {
 		return nil, err
@@ -189,4 +232,15 @@ func (p *Provider) restoreMariabackup(ctx context.Context, rt engine.Runtime, cf
 	return &engine.RestoreResult{
 		Duration: time.Since(start).Milliseconds(),
 	}, nil
+}
+
+func commandExists(ctx context.Context, rt engine.Runtime, target engine.Container, name string) error {
+	if _, err := rt.Exec(ctx, target, []string{"sh", "-c", "command -v " + shellQuote(name)}); err != nil {
+		return fmt.Errorf("required command %q not found in restore image", name)
+	}
+	return nil
+}
+
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
 }

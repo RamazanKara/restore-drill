@@ -11,12 +11,12 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/RamazanKara/restore-drill/pkg/engine"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/go-connections/nat"
-	"github.com/fluentorbit/restore-drill/pkg/engine"
 )
 
 // Runtime implements engine.Runtime using the Docker Engine API.
@@ -55,7 +55,7 @@ func (r *Runtime) Create(ctx context.Context, spec engine.ContainerSpec) (engine
 	}
 	// Consume pull output to complete the pull
 	_, _ = io.Copy(io.Discard, reader)
-	reader.Close()
+	_ = reader.Close()
 
 	// Build port bindings
 	exposedPorts := nat.PortSet{}
@@ -88,10 +88,10 @@ func (r *Runtime) Create(ctx context.Context, spec engine.ContainerSpec) (engine
 		AutoRemove:   false,
 	}
 	if spec.MemoryLimit > 0 {
-		hostConfig.Resources.Memory = spec.MemoryLimit
+		hostConfig.Memory = spec.MemoryLimit
 	}
 	if spec.CPULimit > 0 {
-		hostConfig.Resources.NanoCPUs = spec.CPULimit
+		hostConfig.NanoCPUs = spec.CPULimit
 	}
 
 	slog.Debug("creating container", "image", spec.Image)
@@ -212,9 +212,10 @@ func WaitReady(ctx context.Context, host string, port int, timeout time.Duration
 		default:
 		}
 
-		conn, err := net.DialTimeout("tcp", addr, 500*time.Millisecond)
+		dialer := net.Dialer{Timeout: 500 * time.Millisecond}
+		conn, err := dialer.DialContext(ctx, "tcp", addr)
 		if err == nil {
-			conn.Close()
+			_ = conn.Close()
 			slog.Debug("port ready", "addr", addr)
 			return nil
 		}

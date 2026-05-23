@@ -5,7 +5,10 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strconv"
+	"strings"
+	"sync"
 	"time"
 )
 
@@ -20,6 +23,10 @@ type DrillResult struct {
 	ValidationPassed bool
 	Checks           []CheckResult
 	Error            error
+	CleanupSkipped   bool
+	TargetID         string
+	TargetHost       string
+	TargetPorts      map[int]int
 }
 
 // CheckResult holds the outcome of a single validation check.
@@ -79,18 +86,17 @@ func (e *Engine) Run(ctx context.Context, drills []DrillConfig) ([]DrillResult, 
 // RunParallel executes all configured drills concurrently.
 func (e *Engine) RunParallel(ctx context.Context, drills []DrillConfig) ([]DrillResult, error) {
 	results := make([]DrillResult, len(drills))
-	done := make(chan struct{}, len(drills))
+	var wg sync.WaitGroup
 
 	for i, drill := range drills {
+		wg.Add(1)
 		go func(idx int, d DrillConfig) {
+			defer wg.Done()
 			results[idx] = e.executeDrill(ctx, d)
-			done <- struct{}{}
 		}(i, drill)
 	}
 
-	for range drills {
-		<-done
-	}
+	wg.Wait()
 
 	if err := e.reporter.Report(ctx, results); err != nil {
 		return results, err
@@ -131,8 +137,14 @@ func (e *Engine) executeDrill(ctx context.Context, drill DrillConfig) DrillResul
 		Env:   env,
 		Ports: GetDefaultPorts(drill.Provider),
 	}
+	if drill.Provider == "redis" && (drill.Backup.Tool == "rdb" || drill.Backup.Tool == "aof") {
+		spec.Cmd = []string{"sh", "-c", "sleep infinity"}
+	}
 	if drill.Restore.Container.Resources.Memory != "" {
 		spec.MemoryLimit = parseMemory(drill.Restore.Container.Resources.Memory)
+	}
+	if drill.Restore.Container.Resources.CPU != "" {
+		spec.CPULimit = parseCPU(drill.Restore.Container.Resources.CPU)
 	}
 
 	// 1. Provision container
@@ -143,10 +155,20 @@ func (e *Engine) executeDrill(ctx context.Context, drill DrillConfig) DrillResul
 		result.Duration = time.Since(result.StartedAt)
 		return result
 	}
+	result.TargetID = container.ID()
+	result.TargetHost = container.Host()
+	result.TargetPorts = make(map[int]int, len(spec.Ports))
+	for _, port := range spec.Ports {
+		result.TargetPorts[port] = container.Port(port)
+	}
+	result.CleanupSkipped = e.noCleanup
 	defer func() {
 		if e.noCleanup {
 			slog.Info("keeping container (--no-cleanup)", "id", container.ID())
 			return
+		}
+		if cleanupErr := provider.Cleanup(ctx, container); cleanupErr != nil {
+			slog.Error("provider cleanup failed", "id", container.ID(), "error", cleanupErr)
 		}
 		slog.Info("destroying container", "id", container.ID())
 		if err := e.runtime.Destroy(ctx, container); err != nil {
@@ -154,9 +176,19 @@ func (e *Engine) executeDrill(ctx context.Context, drill DrillConfig) DrillResul
 		}
 	}()
 
+	if preflight, ok := provider.(PreflightProvider); ok {
+		if err := preflight.Preflight(ctx, e.runtime, drill.Backup, container, drill.Validate); err != nil {
+			result.Error = fmt.Errorf("preflight: %w", err)
+			result.Duration = time.Since(result.StartedAt)
+			return result
+		}
+	}
+
 	// 2. Restore backup
 	slog.Info("restoring backup", "tool", drill.Backup.Tool)
-	restoreResult, err := provider.Restore(ctx, e.runtime, drill.Backup, container)
+	backup := drill.Backup
+	backup.Target = drill.Restore.Target
+	restoreResult, err := provider.Restore(ctx, e.runtime, backup, container)
 	if err != nil {
 		result.Error = fmt.Errorf("restore: %w", err)
 		result.Duration = time.Since(result.StartedAt)
@@ -222,6 +254,7 @@ func (e *Engine) executeDrill(ctx context.Context, drill DrillConfig) DrillResul
 
 // parseMemory converts memory strings like "512Mi" or "1Gi" to bytes.
 func parseMemory(s string) int64 {
+	s = strings.TrimSpace(s)
 	if len(s) < 2 {
 		return 0
 	}
@@ -255,4 +288,31 @@ func parseMemory(s string) int64 {
 		return 0
 	}
 	return n * multiplier
+}
+
+// parseCPU converts Kubernetes-style CPU values to Docker NanoCPUs.
+func parseCPU(s string) int64 {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0
+	}
+	if strings.HasSuffix(s, "m") {
+		n, err := strconv.ParseInt(strings.TrimSuffix(s, "m"), 10, 64)
+		if err != nil {
+			return 0
+		}
+		return n * 1_000_000
+	}
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return 0
+	}
+	return int64(f * 1_000_000_000)
+}
+
+// SortResults orders results by drill name for deterministic persisted state.
+func SortResults(results []DrillResult) {
+	sort.SliceStable(results, func(i, j int) bool {
+		return results[i].Name < results[j].Name
+	})
 }

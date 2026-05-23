@@ -7,7 +7,7 @@ drills:
     backup:
       tool: pgbackrest
       stanza: main
-      repo: ${PGBACKREST_REPO_PATH}
+      source: ${PGBACKREST_REPO_PATH:-/backups/pgbackrest}
     restore:
       timeout: 15m
       container:

@@ -39,8 +39,7 @@ drills:
 }
 
 func TestParseConfig_EnvInterpolation(t *testing.T) {
-	os.Setenv("TEST_BUCKET", "my-bucket")
-	defer os.Unsetenv("TEST_BUCKET")
+	t.Setenv("TEST_BUCKET", "my-bucket")
 
 	yaml := `
 drills:
@@ -68,7 +67,21 @@ drills:
 }
 
 func TestParseConfig_EnvDefault(t *testing.T) {
-	os.Unsetenv("UNSET_VAR")
+	original, hadOriginal := os.LookupEnv("UNSET_VAR")
+	if err := os.Unsetenv("UNSET_VAR"); err != nil {
+		t.Fatalf("unset env: %v", err)
+	}
+	t.Cleanup(func() {
+		var err error
+		if hadOriginal {
+			err = os.Setenv("UNSET_VAR", original)
+		} else {
+			err = os.Unsetenv("UNSET_VAR")
+		}
+		if err != nil {
+			t.Fatalf("restore env: %v", err)
+		}
+	})
 
 	yaml := `
 drills:
@@ -92,6 +105,40 @@ drills:
 	}
 	if cfg.Drills[0].Backup.Source != "s3://default-bucket/backups" {
 		t.Errorf("default interpolation failed, got %q", cfg.Drills[0].Backup.Source)
+	}
+}
+
+func TestParseConfig_ProviderToolAliases(t *testing.T) {
+	tests := []struct {
+		name string
+		tool string
+	}{
+		{name: "pg restore", tool: "pg_restore"},
+		{name: "walg alias", tool: "walg"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			yaml := `
+drills:
+  - name: test-pg
+    provider: postgres
+    backup:
+      tool: ` + tt.tool + `
+      source: /backups/latest
+    restore:
+      container:
+        image: postgres:16
+    checks:
+      - name: check
+        type: query
+        sql: "SELECT 1"
+        expect: "== 1"
+`
+			if _, err := ParseConfig([]byte(yaml)); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
 	}
 }
 
@@ -216,6 +263,89 @@ drills:
       - name: check1
         type: query
         sql: "SELECT 1"
+`,
+		},
+		{
+			name: "unsupported backup tool for provider",
+			yaml: `
+drills:
+  - name: test
+    provider: redis
+    backup:
+      tool: pg_dump
+      source: /backups/dump.rdb
+    restore:
+      container:
+        image: redis:7-alpine
+`,
+		},
+		{
+			name: "unsupported repo type",
+			yaml: `
+drills:
+  - name: test
+    provider: postgres
+    backup:
+      tool: pg_dump
+      repo:
+        type: gcs
+        bucket: backups
+        prefix: postgres/latest.sql
+    restore:
+      container:
+        image: postgres:16
+`,
+		},
+		{
+			name: "repo missing bucket",
+			yaml: `
+drills:
+  - name: test
+    provider: mysql
+    backup:
+      tool: mysqldump
+      repo:
+        type: s3
+        prefix: mysql/latest.sql
+    restore:
+      container:
+        image: mysql:8
+`,
+		},
+		{
+			name: "freshness check missing sql",
+			yaml: `
+drills:
+  - name: test
+    provider: postgres
+    backup:
+      tool: pg_dump
+      source: /backups/latest.sql
+    restore:
+      container:
+        image: postgres:16
+    checks:
+      - name: freshness
+        type: freshness
+        expect: "age < 24h"
+`,
+		},
+		{
+			name: "key sample missing keys",
+			yaml: `
+drills:
+  - name: test
+    provider: redis
+    backup:
+      tool: aof
+      source: /backups/appendonly.aof
+    restore:
+      container:
+        image: redis:7-alpine
+    checks:
+      - name: sample
+        type: key_sample
+        expect: exists
 `,
 		},
 	}

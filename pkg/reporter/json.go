@@ -8,7 +8,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/fluentorbit/restore-drill/pkg/engine"
+	"github.com/RamazanKara/restore-drill/pkg/engine"
 )
 
 // jsonResult is the serialization format for drill results.
@@ -23,6 +23,10 @@ type jsonResult struct {
 	BackupAge        string      `json:"backup_age,omitempty"`
 	ValidationPassed bool        `json:"validation_passed"`
 	Error            string      `json:"error,omitempty"`
+	CleanupSkipped   bool        `json:"cleanup_skipped,omitempty"`
+	TargetID         string      `json:"target_id,omitempty"`
+	TargetHost       string      `json:"target_host,omitempty"`
+	TargetPorts      map[int]int `json:"target_ports,omitempty"`
 	Checks           []jsonCheck `json:"checks"`
 }
 
@@ -49,7 +53,7 @@ func NewJSON(pretty bool) *JSON {
 
 // NewJSONFile creates a JSON reporter that writes to a file.
 func NewJSONFile(path string, pretty bool) (*JSON, error) {
-	f, err := os.Create(path)
+	f, err := os.Create(path) // #nosec G304 -- path is supplied by the caller for report output.
 	if err != nil {
 		return nil, fmt.Errorf("create json output file: %w", err)
 	}
@@ -69,6 +73,10 @@ func (r *JSON) Report(_ context.Context, results []engine.DrillResult) error {
 			Duration:         res.Duration.String(),
 			DurationMs:       res.Duration.Milliseconds(),
 			ValidationPassed: res.ValidationPassed,
+			CleanupSkipped:   res.CleanupSkipped,
+			TargetID:         res.TargetID,
+			TargetHost:       res.TargetHost,
+			TargetPorts:      res.TargetPorts,
 		}
 
 		if res.Error != nil || !res.ValidationPassed {

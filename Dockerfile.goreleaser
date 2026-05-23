@@ -1,0 +1,3 @@
+FROM gcr.io/distroless/static-debian12:nonroot
+COPY restore-drill /usr/local/bin/restore-drill
+ENTRYPOINT ["/usr/local/bin/restore-drill"]

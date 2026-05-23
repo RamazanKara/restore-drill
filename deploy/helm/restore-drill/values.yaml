@@ -1,8 +1,12 @@
 # restore-drill Helm values
 image:
-  repository: ghcr.io/fluentorbit/restore-drill
+  repository: ghcr.io/ramazankara/restore-drill
   tag: ""  # defaults to appVersion
   pullPolicy: IfNotPresent
+
+runtime:
+  mode: kubernetes
+  namespace: "" # defaults to release namespace
 
 imagePullSecrets: []
 nameOverride: ""
@@ -44,6 +48,9 @@ serviceAccount:
   name: ""
   annotations: {}
 
+rbac:
+  create: true
+
 podAnnotations: {}
 podLabels: {}
 
@@ -65,7 +72,7 @@ securityContext:
   fsGroup: 65534
 
 containerSecurityContext:
-  readOnlyRootFilesystem: true
+  readOnlyRootFilesystem: false
   allowPrivilegeEscalation: false
   capabilities:
     drop:

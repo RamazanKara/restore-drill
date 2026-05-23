@@ -17,6 +17,7 @@ type BackupConfig struct {
 	Stanza string     `yaml:"stanza"`
 	Source string     `yaml:"source"`
 	Repo   RepoConfig `yaml:"repo"`
+	Target string     `yaml:"-"`
 }
 
 // RepoConfig defines backup storage location.

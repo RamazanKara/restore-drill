@@ -9,7 +9,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/fluentorbit/restore-drill/pkg/engine"
+	"github.com/RamazanKara/restore-drill/pkg/engine"
 )
 
 // Stdout writes drill results as a formatted table to stdout.
@@ -26,8 +26,12 @@ func NewStdout() *Stdout {
 func (r *Stdout) Report(_ context.Context, results []engine.DrillResult) error {
 	w := tabwriter.NewWriter(r.Writer, 0, 0, 2, ' ', 0)
 
-	fmt.Fprintf(w, "\n%s\t%s\t%s\t%s\t%s\n", "DRILL", "PROVIDER", "STATUS", "DURATION", "CHECKS")
-	fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", "-----", "--------", "------", "--------", "------")
+	if _, err := fmt.Fprintf(w, "\n%s\t%s\t%s\t%s\t%s\n", "DRILL", "PROVIDER", "STATUS", "DURATION", "CHECKS"); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", "-----", "--------", "------", "--------", "------"); err != nil {
+		return err
+	}
 
 	allPassed := true
 	for _, res := range results {
@@ -46,23 +50,31 @@ func (r *Stdout) Report(_ context.Context, results []engine.DrillResult) error {
 		}
 
 		checkStr := fmt.Sprintf("%d/%d", passed, total)
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
-			res.Name, res.Provider, status, res.Duration.Truncate(1e6).String(), checkStr)
+		if _, err := fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
+			res.Name, res.Provider, status, res.Duration.Truncate(1e6).String(), checkStr); err != nil {
+			return err
+		}
 	}
 
-	fmt.Fprintln(w)
-	w.Flush()
+	if _, err := fmt.Fprintln(w); err != nil {
+		return err
+	}
+	if err := w.Flush(); err != nil {
+		return err
+	}
 
 	// Print detailed check results
 	for _, res := range results {
 		if len(res.Checks) == 0 {
 			continue
 		}
-		fmt.Fprintf(r.Writer, "  %s checks:\n", res.Name)
+		if _, err := fmt.Fprintf(r.Writer, "  %s checks:\n", res.Name); err != nil {
+			return err
+		}
 		for _, c := range res.Checks {
-			icon := "✓"
+			icon := "OK"
 			if !c.Passed {
-				icon = "✗"
+				icon = "FAIL"
 			}
 			detail := ""
 			if c.Error != nil {
@@ -70,17 +82,34 @@ func (r *Stdout) Report(_ context.Context, results []engine.DrillResult) error {
 			} else if !c.Passed {
 				detail = fmt.Sprintf(" (got: %s, want: %s)", c.Actual, c.Expected)
 			}
-			fmt.Fprintf(r.Writer, "    %s %s [%s]%s\n", icon, c.Name, c.Duration.Truncate(1e6).String(), detail)
+			if _, err := fmt.Fprintf(r.Writer, "    %s %s [%s]%s\n", icon, c.Name, c.Duration.Truncate(1e6).String(), detail); err != nil {
+				return err
+			}
 		}
-		fmt.Fprintln(r.Writer)
+		if res.CleanupSkipped {
+			if _, err := fmt.Fprintf(r.Writer, "    retained target: %s (%s %v)\n", res.TargetID, res.TargetHost, res.TargetPorts); err != nil {
+				return err
+			}
+		}
+		if _, err := fmt.Fprintln(r.Writer); err != nil {
+			return err
+		}
 	}
 
 	if !allPassed {
-		fmt.Fprintf(r.Writer, "%s\n", strings.Repeat("─", 40))
-		fmt.Fprintf(r.Writer, "Result: FAILED\n")
+		if _, err := fmt.Fprintf(r.Writer, "%s\n", strings.Repeat("-", 40)); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(r.Writer, "Result: FAILED\n"); err != nil {
+			return err
+		}
 	} else if len(results) > 0 {
-		fmt.Fprintf(r.Writer, "%s\n", strings.Repeat("─", 40))
-		fmt.Fprintf(r.Writer, "Result: PASSED\n")
+		if _, err := fmt.Fprintf(r.Writer, "%s\n", strings.Repeat("-", 40)); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(r.Writer, "Result: PASSED\n"); err != nil {
+			return err
+		}
 	}
 
 	return nil

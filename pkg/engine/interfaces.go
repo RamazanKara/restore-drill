@@ -17,6 +17,11 @@ type Provider interface {
 	Cleanup(ctx context.Context, target Container) error
 }
 
+// PreflightProvider can validate target capabilities before restore execution.
+type PreflightProvider interface {
+	Preflight(ctx context.Context, rt Runtime, cfg BackupConfig, target Container, checks []Check) error
+}
+
 // RestoreResult holds metadata from a restore operation.
 type RestoreResult struct {
 	BackupTimestamp string
