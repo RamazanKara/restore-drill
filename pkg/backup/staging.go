@@ -75,13 +75,26 @@ func stageSource(ctx context.Context, rt engine.Runtime, target engine.Container
 
 	stagedPath := filepath.ToSlash(filepath.Join(stageDir, filepath.Base(source)))
 	pr, pw := io.Pipe()
+	tarErrCh := make(chan error, 1)
 	go func() {
-		pw.CloseWithError(writeTar(pw, source, info))
+		err := writeTar(pw, source, info)
+		tarErrCh <- err
+		_ = pw.CloseWithError(err)
 	}()
 
-	if err := rt.CopyTo(ctx, target, stageDir, pr); err != nil {
+	copyErr := rt.CopyTo(ctx, target, stageDir+"/", pr)
+	if copyErr != nil {
 		_ = pr.Close()
-		return nil, fmt.Errorf("copy backup source into target: %w", err)
+		if tarErr := <-tarErrCh; tarErr != nil && !errors.Is(tarErr, io.ErrClosedPipe) {
+			return nil, fmt.Errorf("archive backup source for copy: %w", tarErr)
+		}
+		if out, diagErr := rt.Exec(ctx, target, []string{"sh", "-c", "id; ls -ld /tmp /tmp/restore-drill-backups 2>&1"}); diagErr == nil {
+			return nil, fmt.Errorf("copy backup source into target: %w (target staging diagnostics: %s)", copyErr, strings.TrimSpace(string(out)))
+		}
+		return nil, fmt.Errorf("copy backup source into target: %w", copyErr)
+	}
+	if tarErr := <-tarErrCh; tarErr != nil {
+		return nil, fmt.Errorf("archive backup source for copy: %w", tarErr)
 	}
 
 	slog.Info("staged backup source", "source", source, "target", stagedPath)
@@ -98,7 +111,7 @@ func repoFromS3URI(uri string) (engine.RepoConfig, error) {
 }
 
 func ensureStageDir(ctx context.Context, rt engine.Runtime, target engine.Container) error {
-	if _, err := rt.Exec(ctx, target, []string{"mkdir", "-p", stageDir}); err != nil {
+	if _, err := rt.Exec(ctx, target, []string{"sh", "-c", "mkdir -p " + stageDir + " && chmod 0777 " + stageDir}); err != nil {
 		return fmt.Errorf("create target staging directory: %w", err)
 	}
 	return nil
@@ -137,7 +150,16 @@ func writeTar(w io.Writer, source string, info os.FileInfo) error {
 }
 
 func addFileToTar(tw *tar.Writer, path, name string, info os.FileInfo) error {
-	hdr, err := tar.FileInfoHeader(info, "")
+	linkTarget := ""
+	if info.Mode()&os.ModeSymlink != 0 {
+		target, err := os.Readlink(path)
+		if err != nil {
+			return fmt.Errorf("read symlink %s: %w", path, err)
+		}
+		linkTarget = target
+	}
+
+	hdr, err := tar.FileInfoHeader(info, linkTarget)
 	if err != nil {
 		return fmt.Errorf("tar header for %s: %w", path, err)
 	}
@@ -290,4 +312,95 @@ func latestObjectKey(ctx context.Context, client *s3.Client, bucket, prefix stri
 		return "", fmt.Errorf("no objects found at s3://%s/%s", bucket, prefix)
 	}
 	return latestKey, nil
+}
+
+// ArchiveRequirements returns commands needed inside the target to expand path.
+func ArchiveRequirements(path string) []string {
+	switch archiveKind(path) {
+	case "tar", "tar.gz":
+		return []string{"tar"}
+	case "xbstream":
+		return []string{"xbstream"}
+	case "xbstream.gz":
+		return []string{"gzip", "xbstream"}
+	default:
+		return nil
+	}
+}
+
+// MaterializeArchive expands a staged archive inside target and returns the directory to restore from.
+//
+// Non-archive paths are returned unchanged so callers can support both mounted
+// directories and common physical-backup archive formats with one code path.
+func MaterializeArchive(ctx context.Context, rt engine.Runtime, target engine.Container, stagedPath, destDir string) (string, error) {
+	kind := archiveKind(stagedPath)
+	if kind == "" {
+		return stagedPath, nil
+	}
+
+	out, err := rt.Exec(ctx, target, []string{"sh", "-c", materializeArchiveScript(stagedPath, destDir, kind)})
+	if err != nil {
+		return "", fmt.Errorf("extract backup archive %s: %w", stagedPath, err)
+	}
+
+	restoreDir := strings.TrimSpace(string(out))
+	if restoreDir == "" {
+		return "", fmt.Errorf("extract backup archive %s: target extraction command returned an empty path", stagedPath)
+	}
+	return restoreDir, nil
+}
+
+func archiveKind(path string) string {
+	lower := strings.ToLower(path)
+	switch {
+	case strings.HasSuffix(lower, ".xbstream.gz"):
+		return "xbstream.gz"
+	case strings.HasSuffix(lower, ".xbstream"):
+		return "xbstream"
+	case strings.HasSuffix(lower, ".tar.gz") || strings.HasSuffix(lower, ".tgz"):
+		return "tar.gz"
+	case strings.HasSuffix(lower, ".tar"):
+		return "tar"
+	default:
+		return ""
+	}
+}
+
+func materializeArchiveScript(stagedPath, destDir, kind string) string {
+	var extract string
+	switch kind {
+	case "tar.gz":
+		extract = `tar -xzf "$src" -C "$dest"`
+	case "tar":
+		extract = `tar -xf "$src" -C "$dest"`
+	case "xbstream.gz":
+		extract = `gzip -dc "$src" | xbstream -x -C "$dest"`
+	case "xbstream":
+		extract = `xbstream -x -C "$dest" < "$src"`
+	default:
+		extract = `echo "unsupported archive format" >&2; exit 64`
+	}
+
+	return fmt.Sprintf(`set -eu
+# restore-drill physical backup archive materialization
+src=%s
+dest=%s
+rm -rf "$dest"
+mkdir -p "$dest"
+%s
+if [ -f "$dest/xtrabackup_checkpoints" ] || [ -f "$dest/backup.info" ] || [ -d "$dest/archive" ]; then
+  printf '%%s' "$dest"
+  exit 0
+fi
+set -- "$dest"/*
+if [ "$#" -eq 1 ] && [ -d "$1" ]; then
+  printf '%%s' "$1"
+  exit 0
+fi
+printf '%%s' "$dest"
+`, shellQuote(stagedPath), shellQuote(destDir), extract)
+}
+
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
 }

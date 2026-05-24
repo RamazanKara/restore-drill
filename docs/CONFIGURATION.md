@@ -47,6 +47,8 @@ backup:
 - a path already mounted inside the target
 - an `s3://bucket/key-or-prefix` URI
 
+Physical restore sources for pgBackRest, WAL-G local repositories, xtrabackup, and mariabackup can be directories or common archive files. restore-drill expands `.tar`, `.tar.gz`, `.tgz`, `.xbstream`, and `.xbstream.gz` inside the restore target before running the provider restore command.
+
 S3-compatible repo form:
 
 ```yaml
@@ -85,7 +87,7 @@ restore:
 
 `target` is used by PITR-capable tools. CPU accepts whole cores such as `"1"` and Kubernetes-style millicores such as `"500m"`.
 
-The restore image must include the selected provider client and backup tool. Preflight checks fail before restore if commands are missing.
+The restore image must include the selected provider client and backup tool. Archive-based physical backups also require archive tools in the restore image: `tar` for tar archives, `xbstream` for xbstream archives, and `gzip` for compressed xbstream archives. Preflight checks fail before restore if required commands are missing and the archive format is known from the configured path.
 
 ## Checks
 

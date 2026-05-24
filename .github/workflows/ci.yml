@@ -81,10 +81,37 @@ jobs:
       - name: Kubernetes runtime smoke test
         run: KEEP_KIND_CLUSTER=1 make test-k8s
 
+  docker-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Docker image smoke test
+        run: make docker-smoke
+
+  docker-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Docker provider integration tests
+        run: make test-integration
+
   snapshot:
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    needs: [verify, lint, helm, kubernetes-smoke]
+    needs: [verify, lint, helm, kubernetes-smoke, docker-smoke, docker-integration]
     steps:
       - uses: actions/checkout@v6
         with:

@@ -11,6 +11,8 @@ helm install restore-drill deploy/helm/restore-drill \
   --set-file config.inline=drill.yaml
 ```
 
+The chart requires either `config.inline` or `config.existingConfigMap`; Helm rendering fails fast if neither is set.
+
 For production, prefer secret-backed environment variables for backup credentials:
 
 ```yaml
@@ -33,6 +35,7 @@ env:
 - Restore targets are short-lived pods in the release namespace by default.
 - The chart creates a Role and RoleBinding for pod create/get/list/watch/delete, pod exec, and pod logs.
 - `runtime.namespace` can override where ephemeral restore pods are created.
+- `runtime.serviceAccountName`, `runtime.imagePullSecrets`, `runtime.podLabels`, and `runtime.podAnnotations` apply to the ephemeral restore pods created for each drill.
 - `--no-cleanup` keeps the target pod for manual inspection and records its ID in state/report output.
 
 ## Values that matter most
@@ -42,6 +45,10 @@ schedule: "0 3 * * *"
 runtime:
   mode: kubernetes
   namespace: ""
+  serviceAccountName: ""
+  imagePullSecrets: []
+  podLabels: {}
+  podAnnotations: {}
 config:
   inline: ""
   existingConfigMap: ""
@@ -52,6 +59,14 @@ networkPolicy:
 ```
 
 Enable `networkPolicy` only after adding egress rules for DNS, backup storage, and Pushgateway/webhook targets.
+
+Top-level `serviceAccount`, `imagePullSecrets`, `podLabels`, and `podAnnotations` configure the CronJob pod that runs restore-drill. The nested `runtime.*` values configure the short-lived database restore pods that restore-drill creates.
+
+## Metrics
+
+restore-drill does not expose a long-lived metrics HTTP service in Kubernetes. The Helm chart runs it as a CronJob, and each job exits after pushing run results to the configured Prometheus Pushgateway.
+
+If your cluster uses Prometheus Operator, enable or create a `ServiceMonitor` for the Pushgateway service itself. A `ServiceMonitor` for the restore-drill CronJob would not have a stable restore-drill endpoint to scrape.
 
 ## Image requirements
 

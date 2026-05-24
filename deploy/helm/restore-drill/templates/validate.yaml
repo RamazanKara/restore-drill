@@ -1,0 +1,3 @@
+{{- if and (not .Values.config.inline) (not .Values.config.existingConfigMap) -}}
+{{- fail "config.inline or config.existingConfigMap is required" -}}
+{{- end -}}

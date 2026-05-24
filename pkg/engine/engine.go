@@ -140,6 +140,12 @@ func (e *Engine) executeDrill(ctx context.Context, drill DrillConfig) DrillResul
 	if drill.Provider == "redis" && (drill.Backup.Tool == "rdb" || drill.Backup.Tool == "aof") {
 		spec.Cmd = []string{"sh", "-c", "sleep infinity"}
 	}
+	if drill.Provider == "mysql" && (drill.Backup.Tool == "xtrabackup" || drill.Backup.Tool == "mariabackup") {
+		spec.Cmd = []string{"sh", "-c", "sleep infinity"}
+	}
+	if drill.Provider == "postgres" && (drill.Backup.Tool == "pgbackrest" || drill.Backup.Tool == "wal-g" || drill.Backup.Tool == "walg") {
+		spec.Cmd = []string{"sh", "-c", "sleep infinity"}
+	}
 	if drill.Restore.Container.Resources.Memory != "" {
 		spec.MemoryLimit = parseMemory(drill.Restore.Container.Resources.Memory)
 	}

@@ -7,6 +7,11 @@ image:
 runtime:
   mode: kubernetes
   namespace: "" # defaults to release namespace
+  # Settings applied to ephemeral restore target pods created by the runtime.
+  serviceAccountName: ""
+  podLabels: {}
+  podAnnotations: {}
+  imagePullSecrets: []
 
 imagePullSecrets: []
 nameOverride: ""

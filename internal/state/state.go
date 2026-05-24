@@ -2,7 +2,9 @@ package state
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -63,7 +65,7 @@ func Save(path string, run *LastRun) error {
 		return fmt.Errorf("marshal state: %w", err)
 	}
 
-	if err := os.WriteFile(path, data, 0o600); err != nil {
+	if err := writeFileAtomic(path, data, 0o600); err != nil {
 		return fmt.Errorf("write state: %w", err)
 	}
 	return nil
@@ -99,15 +101,28 @@ func AppendHistory(run *LastRun) error {
 		return fmt.Errorf("create history dir: %w", err)
 	}
 
-	filename := run.Timestamp.UTC().Format("20060102T150405.000000000Z") + ".json"
-	path := filepath.Join(dir, filename)
-
 	data, err := json.MarshalIndent(run, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal history: %w", err)
 	}
 
-	return os.WriteFile(path, data, 0o600)
+	base := run.Timestamp.UTC().Format("20060102T150405.000000000Z")
+	for attempt := 0; attempt < 1000; attempt++ {
+		filename := base + ".json"
+		if attempt > 0 {
+			filename = fmt.Sprintf("%s-%03d.json", base, attempt)
+		}
+		path := filepath.Join(dir, filename)
+		if err := writeFileAtomicNoReplace(path, data, 0o600); err != nil {
+			if errors.Is(err, fs.ErrExist) {
+				continue
+			}
+			return fmt.Errorf("write history: %w", err)
+		}
+		return nil
+	}
+
+	return fmt.Errorf("write history: exhausted unique filenames for %s", base)
 }
 
 // LoadHistory loads all runs from the history directory within the given window.
@@ -144,4 +159,72 @@ func LoadHistory(since time.Time) ([]*LastRun, error) {
 		return runs[i].Timestamp.Before(runs[j].Timestamp)
 	})
 	return runs, nil
+}
+
+func writeFileAtomic(path string, data []byte, mode fs.FileMode) error {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	defer func() {
+		_ = os.Remove(tmpPath)
+	}()
+
+	if err := writeAndSync(tmp, data, mode); err != nil {
+		return err
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		return err
+	}
+	return syncDirBestEffort(dir)
+}
+
+func writeFileAtomicNoReplace(path string, data []byte, mode fs.FileMode) error {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	defer func() {
+		_ = os.Remove(tmpPath)
+	}()
+
+	if err := writeAndSync(tmp, data, mode); err != nil {
+		return err
+	}
+	if err := os.Link(tmpPath, path); err != nil {
+		return err
+	}
+	return syncDirBestEffort(dir)
+}
+
+func writeAndSync(f *os.File, data []byte, mode fs.FileMode) error {
+	if err := f.Chmod(mode); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if _, err := f.Write(data); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		_ = f.Close()
+		return err
+	}
+	return f.Close()
+}
+
+func syncDirBestEffort(dir string) error {
+	f, err := os.Open(dir) // #nosec G304 -- state directory is controlled by restore-drill.
+	if err != nil {
+		return nil
+	}
+	defer func() {
+		_ = f.Close()
+	}()
+	_ = f.Sync()
+	return nil
 }

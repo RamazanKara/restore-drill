@@ -15,6 +15,7 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
+	"github.com/docker/docker/errdefs"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/go-connections/nat"
 )
@@ -46,16 +47,11 @@ func (c *dockerContainer) Port(containerPort int) int {
 	return c.portMap[containerPort]
 }
 
-// Create pulls the image (if needed) and starts a container.
+// Create pulls the image when it is not already available locally, then starts a container.
 func (r *Runtime) Create(ctx context.Context, spec engine.ContainerSpec) (engine.Container, error) {
-	slog.Debug("pulling image", "image", spec.Image)
-	reader, err := r.client.ImagePull(ctx, spec.Image, types.ImagePullOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("docker: pull image %s: %w", spec.Image, err)
+	if err := r.ensureImage(ctx, spec.Image); err != nil {
+		return nil, err
 	}
-	// Consume pull output to complete the pull
-	_, _ = io.Copy(io.Discard, reader)
-	_ = reader.Close()
 
 	// Build port bindings
 	exposedPorts := nat.PortSet{}
@@ -131,6 +127,29 @@ func (r *Runtime) Create(ctx context.Context, spec engine.ContainerSpec) (engine
 
 	slog.Info("container started", "id", dc.id, "ports", portMap)
 	return dc, nil
+}
+
+func (r *Runtime) ensureImage(ctx context.Context, image string) error {
+	if _, _, err := r.client.ImageInspectWithRaw(ctx, image); err == nil {
+		slog.Debug("using local image", "image", image)
+		return nil
+	} else if !errdefs.IsNotFound(err) {
+		return fmt.Errorf("docker: inspect image %s: %w", image, err)
+	}
+
+	slog.Debug("pulling image", "image", image)
+	reader, err := r.client.ImagePull(ctx, image, types.ImagePullOptions{})
+	if err != nil {
+		return fmt.Errorf("docker: pull image %s: %w", image, err)
+	}
+	if _, err := io.Copy(io.Discard, reader); err != nil {
+		_ = reader.Close()
+		return fmt.Errorf("docker: read image pull output for %s: %w", image, err)
+	}
+	if err := reader.Close(); err != nil {
+		return fmt.Errorf("docker: close image pull stream for %s: %w", image, err)
+	}
+	return nil
 }
 
 // Exec runs a command inside the container and returns combined output.

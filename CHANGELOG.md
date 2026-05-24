@@ -6,6 +6,28 @@ The format is based on Keep a Changelog, and this project uses semantic versioni
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-05-24
+
+### Changed
+
+- Removed restore cost estimation from the roadmap to keep restore-drill focused on restore verification.
+- Clarified v1.0 release readiness, project non-goals, and Pushgateway-based Kubernetes metrics guidance.
+- Changed Pushgateway writes to replace the current grouping on each run, avoiding stale counter accumulation between CronJob executions.
+- Added JSON reporter shape coverage for retained targets, check evidence, backup timing, and failures.
+- Made latest-run and history persistence atomic, with concurrent same-timestamp history appends preserved as separate entries.
+- Added provider-specific check validation and preflight coverage for required restore-image tools.
+- Added per-check failure evidence to compliance reports.
+- Added lifecycle regression tests and Kubernetes restore-target pod customization for service accounts, pull secrets, labels, and annotations.
+- Made the Helm chart fail fast when neither inline config nor an existing ConfigMap is provided, and expanded Helm rendering checks for Kubernetes runtime options.
+- Expanded Docker integration coverage to restore compressed PostgreSQL/MySQL logical dumps and Redis AOF/RDB fixtures with real key/value validation.
+- Added provider restore-path regression tests for pgBackRest PITR, WAL-G PITR recovery config, `pg_restore`, xtrabackup, and mariabackup command construction.
+- Added a Docker image smoke target and CI job to prove the release image boots and reports its version.
+- Added archive materialization for pgBackRest, xtrabackup, and mariabackup physical restore sources, including preflight checks for required archive tools.
+- Added S3-compatible staging coverage for latest-object prefix resolution and target staging.
+- Added real Docker integration fixtures for PostgreSQL pgBackRest, PostgreSQL WAL-G, Percona xtrabackup, and MariaDB mariabackup physical restores.
+- Added WAL-G local repository staging with generated recovery config for staged file-backed repositories.
+- Added support for MariaDB-native client/admin/safe binary names.
+
 ## [0.2.0] - 2026-05-23
 
 ### Added

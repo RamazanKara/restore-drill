@@ -1,0 +1,8 @@
+runtime:
+  serviceAccountName: restore-target
+  imagePullSecrets:
+    - registry-creds
+  podLabels:
+    team: platform
+  podAnnotations:
+    backup.example.com/reason: nightly

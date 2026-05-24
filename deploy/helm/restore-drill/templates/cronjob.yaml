@@ -52,6 +52,22 @@ spec:
                 - {{ .Values.runtime.mode | quote }}
                 - --kube-namespace
                 - {{ .Values.runtime.namespace | default .Release.Namespace | quote }}
+                {{- with .Values.runtime.serviceAccountName }}
+                - --kube-service-account
+                - {{ . | quote }}
+                {{- end }}
+                {{- range $key, $value := .Values.runtime.podLabels }}
+                - --kube-pod-label
+                - {{ printf "%s=%s" $key $value | quote }}
+                {{- end }}
+                {{- range $key, $value := .Values.runtime.podAnnotations }}
+                - --kube-pod-annotation
+                - {{ printf "%s=%s" $key $value | quote }}
+                {{- end }}
+                {{- range .Values.runtime.imagePullSecrets }}
+                - --kube-image-pull-secret
+                - {{ . | quote }}
+                {{- end }}
               securityContext:
                 {{- toYaml .Values.containerSecurityContext | nindent 16 }}
               resources:

@@ -39,7 +39,7 @@ var (
 		prometheus.CounterOpts{
 			Namespace: namespace,
 			Name:      "validation_checks_total",
-			Help:      "Number of validation checks executed.",
+			Help:      "Number of validation checks reported in the current push.",
 		},
 		[]string{"drill", "provider", "environment"},
 	)
@@ -48,7 +48,7 @@ var (
 		prometheus.CounterOpts{
 			Namespace: namespace,
 			Name:      "validation_checks_failed",
-			Help:      "Number of validation checks failed.",
+			Help:      "Number of validation checks failed in the current push.",
 		},
 		[]string{"drill", "provider", "environment"},
 	)
@@ -66,7 +66,7 @@ var (
 		prometheus.CounterOpts{
 			Namespace: namespace,
 			Name:      "runs_total",
-			Help:      "Total drill executions.",
+			Help:      "Drill executions reported in the current push.",
 		},
 		[]string{"drill", "provider", "environment", "status"},
 	)

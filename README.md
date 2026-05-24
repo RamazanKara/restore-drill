@@ -21,14 +21,16 @@ Backups that are never restored are guesses. `restore-drill` restores real backu
 
 | Provider | Backup tools | Runtime status | Release gate coverage | Notes |
 | --- | --- | --- | --- | --- |
-| PostgreSQL | `pg_dump`, `pg_restore`, `pgbackrest`, `wal-g` | Docker, Kubernetes | Generated Docker fixture covers `pg_dump`. | Restore image must include `psql`, `pg_isready`, and the selected backup tool. |
-| MySQL/MariaDB | `mysqldump`, `xtrabackup`, `mariabackup` | Docker, Kubernetes | Generated Docker fixture covers `mysqldump`. | Restore image must include `mysql`, `mysqladmin`, and the selected physical backup tool. |
-| Redis | RDB, AOF | Docker, Kubernetes | Generated Docker fixture covers AOF; kind smoke covers AOF on Kubernetes. | Restore image must include `redis-server` and `redis-cli`. |
+| PostgreSQL | `pg_dump`, `pg_restore`, `pgbackrest`, `wal-g` | Docker, Kubernetes | Generated Docker fixtures cover compressed `pg_dump`, real pgBackRest, and real WAL-G local-repository restores. `pg_restore` command construction is covered by provider regression tests. | Restore image must include `psql`, `pg_isready`, and the selected backup tool. pgBackRest and WAL-G sources can be directories or `.tar`/`.tar.gz` archives. |
+| MySQL/MariaDB | `mysqldump`, `xtrabackup`, `mariabackup` | Docker, Kubernetes | Generated Docker fixtures cover compressed `mysqldump`, real Percona xtrabackup, and real MariaDB mariabackup physical restores. | Restore image may use MySQL or MariaDB client binary names and must include the selected physical backup tool. Physical sources can be directories, tar archives, or xbstream archives. |
+| Redis | RDB, AOF | Docker, Kubernetes | Generated Docker fixtures cover AOF and RDB with restored key checks; kind smoke covers AOF on Kubernetes. | Restore image must include `redis-server` and `redis-cli`. |
 | Prometheus Pushgateway | metrics push | GA | Enabled through `metrics.prometheus`. |
-| JSON/HTML compliance reports | local history | GA | `report` reads `~/.restore-drill/history`. |
+| JSON/HTML compliance reports | local history | GA | `report` reads `~/.restore-drill/history` and includes per-check failure evidence. |
 | Webhooks | JSON POST | GA | Configure per-drill `alerts` with `type: webhook`. |
 
-Planned providers: standalone S3 object drills, etcd, ClickHouse, MongoDB, Velero, PITR fuzzing, multi-region restore drills, and cost estimation.
+Roadmap candidates: standalone object-store restore drills, etcd, ClickHouse, MongoDB, Velero restore validation, PITR fuzzing, and multi-region restore drills.
+
+restore-drill intentionally stays focused on proving that backups restore correctly. It does not aim to replace backup schedulers, inventory systems, cost-estimation tools, or observability platforms.
 
 ## Install
 
@@ -116,21 +118,25 @@ helm install restore-drill deploy/helm/restore-drill \
 
 The chart runs the CLI with `--runtime=kubernetes`, creates namespace-scoped RBAC for ephemeral restore pods, and supports ConfigMap/Secret driven configuration. See [docs/KUBERNETES.md](docs/KUBERNETES.md).
 
+Kubernetes restore target pods can be shaped for production clusters with `runtime.serviceAccountName`, `runtime.imagePullSecrets`, `runtime.podLabels`, and `runtime.podAnnotations` Helm values, or the matching `--kube-service-account`, `--kube-image-pull-secret`, `--kube-pod-label`, and `--kube-pod-annotation` CLI flags.
+
 For production rollout guidance, see [docs/PRODUCTION.md](docs/PRODUCTION.md).
 
 ## Metrics
 
-All metrics are prefixed with `restore_drill_`.
+restore-drill pushes metrics to Prometheus Pushgateway after each run. The CLI and Helm chart do not expose a long-lived `/metrics` endpoint because restore-drill normally runs as a short-lived job or CronJob. If you use Prometheus Operator, scrape the Pushgateway with your platform's Pushgateway `ServiceMonitor`.
+
+All restore-drill metrics are prefixed with `restore_drill_`.
 
 | Metric | Type | Description |
 | --- | --- | --- |
 | `restore_drill_duration_seconds` | Gauge | Time from start to validated restore. |
 | `restore_drill_backup_age_seconds` | Gauge | Age of the backup used. |
 | `restore_drill_validation_passed` | Gauge | `1` when all checks passed. |
-| `restore_drill_validation_checks_total` | Counter | Checks executed in the current push. |
-| `restore_drill_validation_checks_failed` | Counter | Failed checks in the current push. |
+| `restore_drill_validation_checks_total` | Counter | Checks reported in the current push. |
+| `restore_drill_validation_checks_failed` | Counter | Failed checks reported in the current push. |
 | `restore_drill_last_success_timestamp` | Gauge | Unix timestamp of the last successful drill. |
-| `restore_drill_runs_total` | Counter | Runs by status. |
+| `restore_drill_runs_total` | Counter | Runs reported in the current push by status. |
 
 ## Development
 
@@ -141,10 +147,10 @@ make lint
 make check-examples
 ```
 
-`make verify` also runs Helm and GoReleaser checks and requires those tools on `PATH`. Docker integration tests are opt-in and cover generated `pg_dump`, `mysqldump`, and Redis AOF fixtures:
+`make verify` also runs Helm and GoReleaser checks and requires those tools on `PATH`. Docker integration tests are opt-in and cover generated compressed `pg_dump`, pgBackRest, WAL-G, compressed `mysqldump`, xtrabackup, mariabackup, Redis AOF, and Redis RDB fixtures:
 
 ```bash
-RESTORE_DRILL_INTEGRATION=1 go test -race -count=1 -timeout=10m ./test/integration/...
+RESTORE_DRILL_INTEGRATION=1 go test -race -count=1 -timeout=20m ./test/integration/...
 ```
 
 Release details are in [docs/RELEASE.md](docs/RELEASE.md).

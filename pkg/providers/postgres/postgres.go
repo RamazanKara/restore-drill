@@ -28,11 +28,12 @@ func (p *Provider) Preflight(ctx context.Context, rt engine.Runtime, cfg engine.
 	required := []string{"psql", "pg_isready"}
 	switch cfg.Tool {
 	case "pgbackrest":
-		required = append(required, "pgbackrest")
+		required = append(required, "pg_ctl", "pgbackrest")
+		required = append(required, backup.ArchiveRequirements(configuredBackupPath(cfg))...)
 	case "pg_restore":
 		required = append(required, "pg_restore")
 	case "wal-g", "walg":
-		required = append(required, "wal-g")
+		required = append(required, "pg_ctl", "wal-g")
 	}
 	for _, cmd := range required {
 		if err := commandExists(ctx, rt, target, cmd); err != nil {
@@ -141,13 +142,9 @@ func (p *Provider) waitReady(ctx context.Context, rt engine.Runtime, target engi
 func (p *Provider) restorePgBackRest(ctx context.Context, rt engine.Runtime, cfg engine.BackupConfig, target engine.Container, start time.Time) (*engine.RestoreResult, error) {
 	slog.Info("restoring via pgbackrest", "stanza", cfg.Stanza)
 
-	// Wait for PostgreSQL to be ready (container starts postgres)
-	if err := p.waitReady(ctx, rt, target); err != nil {
+	if err := p.stopPostgresIfRunning(ctx, rt, target); err != nil {
 		return nil, err
 	}
-
-	// Stop postgres before restore
-	_, _ = rt.Exec(ctx, target, []string{"pg_ctl", "stop", "-D", "/var/lib/postgresql/data", "-m", "fast"})
 
 	repoPath := cfg.Source
 	if cfg.Source != "" {
@@ -155,14 +152,17 @@ func (p *Provider) restorePgBackRest(ctx context.Context, rt engine.Runtime, cfg
 		if err != nil {
 			return nil, err
 		}
-		repoPath = staged.Path
+		repoPath, err = backup.MaterializeArchive(ctx, rt, target, staged.Path, "/tmp/restore-drill-backups/pgbackrest-repo")
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if _, err := rt.Exec(ctx, target, []string{"sh", "-c", "rm -rf /var/lib/postgresql/data/*"}); err != nil {
 		return nil, fmt.Errorf("clear postgres data directory: %w", err)
 	}
 
-	cmd := []string{"pgbackrest", "restore", "--stanza", cfg.Stanza, "--delta"}
+	cmd := []string{"pgbackrest", "restore", "--stanza", cfg.Stanza, "--pg1-path", "/var/lib/postgresql/data", "--delta"}
 	if cfg.Repo.Type != "" {
 		cmd = append(cmd, "--repo1-type", cfg.Repo.Type)
 		if cfg.Repo.Bucket != "" {
@@ -190,10 +190,8 @@ func (p *Provider) restorePgBackRest(ctx context.Context, rt engine.Runtime, cfg
 		return nil, fmt.Errorf("pgbackrest restore: %w\noutput: %s", err, string(out))
 	}
 
-	// Start postgres after restore
-	_, err = rt.Exec(ctx, target, []string{"pg_ctl", "start", "-D", "/var/lib/postgresql/data", "-w"})
-	if err != nil {
-		return nil, fmt.Errorf("starting postgres after restore: %w", err)
+	if err := p.startPostgres(ctx, rt, target, "pgbackrest"); err != nil {
+		return nil, err
 	}
 
 	// Wait for ready again
@@ -249,32 +247,51 @@ func (p *Provider) restorePgDump(ctx context.Context, rt engine.Runtime, cfg eng
 func (p *Provider) restoreWalG(ctx context.Context, rt engine.Runtime, cfg engine.BackupConfig, target engine.Container, start time.Time) (*engine.RestoreResult, error) {
 	slog.Info("restoring via wal-g", "source", cfg.Source)
 
-	// Wait for PostgreSQL to be ready
-	if err := p.waitReady(ctx, rt, target); err != nil {
+	if err := p.stopPostgresIfRunning(ctx, rt, target); err != nil {
 		return nil, err
 	}
 
-	// Stop postgres
-	_, _ = rt.Exec(ctx, target, []string{"pg_ctl", "stop", "-D", "/var/lib/postgresql/data", "-m", "fast"})
+	repoPath := ""
+	if cfg.Source != "" {
+		staged, err := backup.Stage(ctx, rt, target, cfg)
+		if err != nil {
+			return nil, err
+		}
+		repoPath, err = backup.MaterializeArchive(ctx, rt, target, staged.Path, "/tmp/restore-drill-backups/walg-repo")
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if _, err := rt.Exec(ctx, target, []string{"sh", "-c", "rm -rf /var/lib/postgresql/data/*"}); err != nil {
+		return nil, fmt.Errorf("clear postgres data directory: %w", err)
+	}
 
 	cmd := []string{"wal-g", "backup-fetch", "/var/lib/postgresql/data", "LATEST"}
+	restoreCommand := "wal-g wal-fetch %f %p"
+	if repoPath != "" {
+		env := "WALG_FILE_PREFIX=" + shellQuote(repoPath) + " "
+		cmd = []string{"sh", "-c", env + "wal-g backup-fetch /var/lib/postgresql/data LATEST"}
+		restoreCommand = "WALG_FILE_PREFIX=" + repoPath + " wal-g wal-fetch %f %p"
+	}
 	out, err := rt.Exec(ctx, target, cmd)
 	if err != nil {
 		return nil, fmt.Errorf("wal-g backup-fetch: %w\noutput: %s", err, string(out))
 	}
 
-	recoveryConfig := "touch /var/lib/postgresql/data/recovery.signal"
+	recoveryLines := fmt.Sprintf("restore_command = '%s'\n", shellEscape(restoreCommand))
 	if cfg.Target != "" && cfg.Target != "latest" {
-		recoveryConfig += fmt.Sprintf(" && printf \"restore_command = 'wal-g wal-fetch %%f %%p'\\nrecovery_target_time = '%s'\\n\" >> /var/lib/postgresql/data/postgresql.auto.conf", shellEscape(cfg.Target))
+		recoveryLines += fmt.Sprintf("recovery_target_time = '%s'\n", shellEscape(cfg.Target))
 	}
+	recoveryConfig := "touch /var/lib/postgresql/data/recovery.signal && cat >> /var/lib/postgresql/data/postgresql.auto.conf <<'RESTORE_DRILL_RECOVERY'\n" +
+		recoveryLines +
+		"RESTORE_DRILL_RECOVERY"
 	if _, err := rt.Exec(ctx, target, []string{"sh", "-c", recoveryConfig}); err != nil {
 		return nil, fmt.Errorf("configure wal-g recovery: %w", err)
 	}
 
-	// Start postgres
-	_, err = rt.Exec(ctx, target, []string{"pg_ctl", "start", "-D", "/var/lib/postgresql/data", "-w"})
-	if err != nil {
-		return nil, fmt.Errorf("starting postgres after wal-g restore: %w", err)
+	if err := p.startPostgres(ctx, rt, target, "wal-g"); err != nil {
+		return nil, err
 	}
 
 	if err := p.waitReady(ctx, rt, target); err != nil {
@@ -336,6 +353,37 @@ func sleepContext(ctx context.Context, d time.Duration) error {
 	case <-timer.C:
 		return nil
 	}
+}
+
+func (p *Provider) stopPostgresIfRunning(ctx context.Context, rt engine.Runtime, target engine.Container) error {
+	out, err := rt.Exec(ctx, target, []string{"pg_isready", "-U", "postgres"})
+	if err != nil || !strings.Contains(string(out), "accepting connections") {
+		return nil
+	}
+	stopOut, err := rt.Exec(ctx, target, []string{"pg_ctl", "stop", "-D", "/var/lib/postgresql/data", "-m", "fast", "-w"})
+	if err != nil {
+		return fmt.Errorf("stop postgres before physical restore: %w\noutput: %s", err, string(stopOut))
+	}
+	return nil
+}
+
+func (p *Provider) startPostgres(ctx context.Context, rt engine.Runtime, target engine.Container, tool string) error {
+	out, err := rt.Exec(ctx, target, []string{
+		"sh",
+		"-c",
+		"pg_ctl start -D /var/lib/postgresql/data -l /tmp/restore-drill-postgres.log -w || { rc=$?; cat /tmp/restore-drill-postgres.log 2>/dev/null || true; exit $rc; }",
+	})
+	if err != nil {
+		return fmt.Errorf("starting postgres after %s restore: %w\noutput: %s", tool, err, string(out))
+	}
+	return nil
+}
+
+func configuredBackupPath(cfg engine.BackupConfig) string {
+	if cfg.Source != "" {
+		return cfg.Source
+	}
+	return cfg.Repo.Prefix
 }
 
 func commandExists(ctx context.Context, rt engine.Runtime, target engine.Container, name string) error {

@@ -8,7 +8,7 @@ LDFLAGS := -s -w \
 	-X $(MODULE)/internal/version.Commit=$(COMMIT) \
 	-X $(MODULE)/internal/version.Date=$(DATE)
 
-.PHONY: build test test-unit test-integration test-k8s vet lint fmt clean release snapshot docker verify helm-lint goreleaser-check check-examples
+.PHONY: build test test-unit test-integration test-k8s vet lint fmt clean release snapshot docker docker-smoke verify helm-lint goreleaser-check check-examples
 
 build:
 	go build -ldflags "$(LDFLAGS)" -o bin/$(BINARY) ./cmd/restore-drill
@@ -19,7 +19,7 @@ test-unit:
 	go test -race -count=1 ./...
 
 test-integration:
-	RESTORE_DRILL_INTEGRATION=1 go test -race -count=1 -timeout=10m ./test/integration/...
+	RESTORE_DRILL_INTEGRATION=1 go test -race -count=1 -timeout=20m ./test/integration/...
 
 test-k8s:
 	bash ./test/k8s/smoke.sh
@@ -38,8 +38,9 @@ check-examples:
 	for f in examples/*.yaml; do go run ./cmd/restore-drill validate --config "$$f"; done
 
 helm-lint:
-	helm lint deploy/helm/restore-drill
-	helm template restore-drill deploy/helm/restore-drill >/dev/null
+	helm lint deploy/helm/restore-drill --set-file config.inline=examples/redis-rdb.yaml
+	helm template restore-drill deploy/helm/restore-drill --set-file config.inline=examples/redis-rdb.yaml >/dev/null
+	helm template restore-drill deploy/helm/restore-drill --set-file config.inline=examples/redis-rdb.yaml -f test/k8s/helm-runtime-options.yaml >/dev/null
 
 goreleaser-check:
 	goreleaser check
@@ -51,6 +52,10 @@ clean:
 
 docker:
 	docker build -t $(BINARY):$(VERSION) .
+
+docker-smoke:
+	docker build -t $(BINARY):smoke .
+	docker run --rm $(BINARY):smoke version
 
 release:
 	goreleaser release --clean

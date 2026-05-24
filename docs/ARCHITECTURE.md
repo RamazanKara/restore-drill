@@ -2,6 +2,8 @@
 
 restore-drill is a Go CLI that orchestrates backup restores into ephemeral Docker containers or Kubernetes pods, validates the restored data, and emits operational and compliance evidence.
 
+It is intentionally narrow. restore-drill verifies restores; it does not schedule backups, manage backup repositories, inventory infrastructure, estimate cloud cost, or replace monitoring systems.
+
 ## Components
 
 ```text
@@ -80,6 +82,8 @@ Each run writes:
 
 - latest run state: `~/.restore-drill/last-run.json`
 - history entry: `~/.restore-drill/history/<timestamp>.json`
+
+State writes are atomic. The latest-run file is replaced through a synced temporary file and rename. History entries are finalized without replacing existing files, so concurrent runs with the same timestamp keep separate entries.
 
 The `report` command builds HTML or JSON compliance reports from local history.
 

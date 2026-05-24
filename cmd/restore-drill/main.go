@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"strings"
 	"text/tabwriter"
 	"time"
 
@@ -56,6 +57,10 @@ func runCmd() *cobra.Command {
 	var target string
 	var runtimeMode string
 	var kubeNamespace string
+	var kubeServiceAccount string
+	var kubePodLabels []string
+	var kubePodAnnotations []string
+	var kubeImagePullSecrets []string
 
 	cmd := &cobra.Command{
 		Use:   "run",
@@ -74,7 +79,23 @@ func runCmd() *cobra.Command {
 				slog.Info("PITR target override", "target", target)
 			}
 
-			rt, err := newRuntime(runtimeMode, kubeNamespace)
+			kubeLabels, err := parseKeyValueFlags(kubePodLabels, "--kube-pod-label")
+			if err != nil {
+				return err
+			}
+			kubeAnnotations, err := parseKeyValueFlags(kubePodAnnotations, "--kube-pod-annotation")
+			if err != nil {
+				return err
+			}
+
+			rt, err := newRuntime(runtimeOptions{
+				mode:             runtimeMode,
+				namespace:        kubeNamespace,
+				serviceAccount:   kubeServiceAccount,
+				podLabels:        kubeLabels,
+				podAnnotations:   kubeAnnotations,
+				imagePullSecrets: kubeImagePullSecrets,
+			})
 			if err != nil {
 				return err
 			}
@@ -132,15 +153,36 @@ func runCmd() *cobra.Command {
 	cmd.Flags().StringVar(&target, "target", "", "PITR target timestamp (e.g. 2024-01-15T10:30:00Z) for incident recovery mode")
 	cmd.Flags().StringVar(&runtimeMode, "runtime", "auto", "Runtime: auto, docker, kubernetes")
 	cmd.Flags().StringVar(&kubeNamespace, "kube-namespace", "restore-drill", "Kubernetes namespace for ephemeral restore pods")
+	cmd.Flags().StringVar(&kubeServiceAccount, "kube-service-account", "", "Kubernetes service account for ephemeral restore pods")
+	cmd.Flags().StringArrayVar(&kubePodLabels, "kube-pod-label", nil, "Kubernetes label for ephemeral restore pods (key=value, repeatable)")
+	cmd.Flags().StringArrayVar(&kubePodAnnotations, "kube-pod-annotation", nil, "Kubernetes annotation for ephemeral restore pods (key=value, repeatable)")
+	cmd.Flags().StringArrayVar(&kubeImagePullSecrets, "kube-image-pull-secret", nil, "Kubernetes image pull secret for ephemeral restore pods (repeatable)")
 
 	return cmd
 }
 
-func newRuntime(mode, namespace string) (engine.Runtime, error) {
-	switch mode {
+type runtimeOptions struct {
+	mode             string
+	namespace        string
+	serviceAccount   string
+	podLabels        map[string]string
+	podAnnotations   map[string]string
+	imagePullSecrets []string
+}
+
+func newRuntime(opts runtimeOptions) (engine.Runtime, error) {
+	kubeOptions := []k8s.Option{
+		k8s.WithNamespace(opts.namespace),
+		k8s.WithServiceAccountName(opts.serviceAccount),
+		k8s.WithPodLabels(opts.podLabels),
+		k8s.WithPodAnnotations(opts.podAnnotations),
+		k8s.WithImagePullSecrets(opts.imagePullSecrets),
+	}
+
+	switch opts.mode {
 	case "auto":
 		if os.Getenv("KUBERNETES_SERVICE_HOST") != "" {
-			rt, err := k8s.New(k8s.WithNamespace(namespace))
+			rt, err := k8s.New(kubeOptions...)
 			if err != nil {
 				return nil, fmt.Errorf("init kubernetes runtime: %w", err)
 			}
@@ -158,14 +200,30 @@ func newRuntime(mode, namespace string) (engine.Runtime, error) {
 		}
 		return rt, nil
 	case "kubernetes":
-		rt, err := k8s.New(k8s.WithNamespace(namespace))
+		rt, err := k8s.New(kubeOptions...)
 		if err != nil {
 			return nil, fmt.Errorf("init kubernetes runtime: %w", err)
 		}
 		return rt, nil
 	default:
-		return nil, fmt.Errorf("unknown runtime %q (use auto, docker, or kubernetes)", mode)
+		return nil, fmt.Errorf("unknown runtime %q (use auto, docker, or kubernetes)", opts.mode)
 	}
+}
+
+func parseKeyValueFlags(values []string, flagName string) (map[string]string, error) {
+	if len(values) == 0 {
+		return nil, nil
+	}
+	parsed := make(map[string]string, len(values))
+	for _, value := range values {
+		key, val, ok := strings.Cut(value, "=")
+		key = strings.TrimSpace(key)
+		if !ok || key == "" {
+			return nil, fmt.Errorf("%s must use key=value syntax (got %q)", flagName, value)
+		}
+		parsed[key] = strings.TrimSpace(val)
+	}
+	return parsed, nil
 }
 
 func buildReporter(format string, cfg *engine.Config) engine.Reporter {

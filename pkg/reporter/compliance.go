@@ -20,17 +20,18 @@ type ComplianceControl struct {
 
 // ComplianceReport aggregates drill history into a compliance view.
 type ComplianceReport struct {
-	GeneratedAt  time.Time
-	PeriodStart  time.Time
-	PeriodEnd    time.Time
-	TotalRuns    int
-	PassedRuns   int
-	FailedRuns   int
-	SuccessRate  float64
-	AvgRTO       time.Duration
-	MaxRTO       time.Duration
-	DrillSummary []DrillSummary
-	Controls     []ComplianceControl
+	GeneratedAt     time.Time
+	PeriodStart     time.Time
+	PeriodEnd       time.Time
+	TotalRuns       int
+	PassedRuns      int
+	FailedRuns      int
+	SuccessRate     float64
+	AvgRTO          time.Duration
+	MaxRTO          time.Duration
+	DrillSummary    []DrillSummary
+	FailureEvidence []FailureEvidence
+	Controls        []ComplianceControl
 }
 
 // DrillSummary is per-drill aggregated data.
@@ -44,6 +45,18 @@ type DrillSummary struct {
 	AvgDuration time.Duration
 	LastRun     time.Time
 	LastStatus  string
+}
+
+// FailureEvidence captures the concrete failed check or run error behind a failed drill.
+type FailureEvidence struct {
+	Timestamp time.Time
+	Drill     string
+	Provider  string
+	Check     string
+	Type      string
+	Expected  string
+	Actual    string
+	Error     string
 }
 
 // BuildComplianceReport builds a report from history.
@@ -80,6 +93,7 @@ func BuildComplianceReport(runs []*state.LastRun, since time.Time) *ComplianceRe
 			} else {
 				report.FailedRuns++
 				ds.FailCount++
+				report.FailureEvidence = append(report.FailureEvidence, failureEvidenceForRun(run.Timestamp, r)...)
 			}
 
 			if run.Timestamp.After(ds.LastRun) {
@@ -107,6 +121,38 @@ func BuildComplianceReport(runs []*state.LastRun, since time.Time) *ComplianceRe
 
 	report.Controls = evaluateControls(report)
 	return report
+}
+
+func failureEvidenceForRun(ts time.Time, r state.RunResult) []FailureEvidence {
+	var evidence []FailureEvidence
+
+	if r.Error != "" {
+		evidence = append(evidence, FailureEvidence{
+			Timestamp: ts,
+			Drill:     r.Name,
+			Provider:  r.Provider,
+			Check:     "restore-drill",
+			Error:     r.Error,
+		})
+	}
+
+	for _, check := range r.Checks {
+		if check.Passed && check.Error == "" {
+			continue
+		}
+		evidence = append(evidence, FailureEvidence{
+			Timestamp: ts,
+			Drill:     r.Name,
+			Provider:  r.Provider,
+			Check:     check.Name,
+			Type:      check.Type,
+			Expected:  check.Expected,
+			Actual:    check.Actual,
+			Error:     check.Error,
+		})
+	}
+
+	return evidence
 }
 
 func evaluateControls(r *ComplianceReport) []ComplianceControl {
@@ -221,6 +267,7 @@ var htmlTmpl = template.Must(template.New("compliance").Funcs(funcMap).Parse(`<!
   .status-pass { color: #16a34a; font-weight: bold; }
   .status-fail { color: #dc2626; font-weight: bold; }
   .status-partial { color: #d97706; font-weight: bold; }
+  .evidence { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 0.9em; white-space: pre-wrap; }
   .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1em; margin: 1em 0; }
   .summary-card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 1em; text-align: center; }
   .summary-card .value { font-size: 2em; font-weight: bold; color: #1e40af; }
@@ -249,6 +296,23 @@ var htmlTmpl = template.Must(template.New("compliance").Funcs(funcMap).Parse(`<!
 <tr><td>{{.Framework}}</td><td>{{.Control}}</td><td>{{.Title}}</td><td class="{{statusClass .Status}}">{{.Status}}</td></tr>
 {{end}}
 </table>
+
+{{if .FailureEvidence}}
+<h2>Failure Evidence</h2>
+<table>
+<tr><th>Time</th><th>Drill</th><th>Check</th><th>Expected</th><th>Actual</th><th>Error</th></tr>
+{{range .FailureEvidence}}
+<tr>
+  <td>{{fmtTime .Timestamp}}</td>
+  <td>{{.Drill}} <span class="evidence">({{.Provider}})</span></td>
+  <td>{{.Check}}{{if .Type}} <span class="evidence">[{{.Type}}]</span>{{end}}</td>
+  <td class="evidence">{{.Expected}}</td>
+  <td class="evidence">{{.Actual}}</td>
+  <td class="evidence">{{.Error}}</td>
+</tr>
+{{end}}
+</table>
+{{end}}
 
 <h2>Drill History</h2>
 <table>

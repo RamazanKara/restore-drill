@@ -2,6 +2,7 @@ package engine
 
 import (
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -355,6 +356,86 @@ drills:
 			_, err := ParseConfig([]byte(tt.yaml))
 			if err == nil {
 				t.Error("expected validation error, got nil")
+			}
+		})
+	}
+}
+
+func TestParseConfig_ProviderSpecificCheckValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		yaml    string
+		wantErr string
+	}{
+		{
+			name: "redis rejects schema",
+			yaml: `
+drills:
+  - name: redis
+    provider: redis
+    backup:
+      tool: aof
+      source: /backups/appendonly.aof
+    restore:
+      container:
+        image: redis:7-alpine
+    checks:
+      - name: schema
+        type: schema
+        sql: "SELECT 1"
+        expect: exists
+`,
+			wantErr: `unsupported type "schema" for provider "redis"`,
+		},
+		{
+			name: "mysql rejects extensions",
+			yaml: `
+drills:
+  - name: mysql
+    provider: mysql
+    backup:
+      tool: mysqldump
+      source: /backups/latest.sql
+    restore:
+      container:
+        image: mysql:8
+    checks:
+      - name: extensions
+        type: extensions
+        expect: pgcrypto
+`,
+			wantErr: `unsupported type "extensions" for provider "mysql"`,
+		},
+		{
+			name: "postgres rejects key sample",
+			yaml: `
+drills:
+  - name: postgres
+    provider: postgres
+    backup:
+      tool: pg_dump
+      source: /backups/latest.sql
+    restore:
+      container:
+        image: postgres:16
+    checks:
+      - name: keys
+        type: key_sample
+        keys: ["user:*"]
+        expect: exists
+`,
+			wantErr: `unsupported type "key_sample" for provider "postgres"`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := ParseConfig([]byte(tt.yaml))
+			if err == nil {
+				t.Fatal("expected validation error, got nil")
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("expected error containing %q, got %v", tt.wantErr, err)
 			}
 		})
 	}

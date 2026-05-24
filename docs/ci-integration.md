@@ -177,6 +177,8 @@ Reports map drill outcomes to compliance controls:
 | BSI C5:2020     | OPS-05       | Recovery time objectives                 |
 | SOC 2           | A1.2         | Recovery testing                         |
 
+HTML reports also include per-check failure evidence with the expected value, actual value, and provider error so failed drills can be reviewed without digging through raw job logs first.
+
 ## Exit Codes
 
 | Code | Meaning |

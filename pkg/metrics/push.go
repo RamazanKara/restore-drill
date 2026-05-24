@@ -32,11 +32,11 @@ func PushResults(results []engine.DrillResult, pushgatewayURL string, labels map
 		[]string{"drill", "provider", "environment"},
 	)
 	checksTotal := prometheus.NewCounterVec(
-		prometheus.CounterOpts{Namespace: namespace, Name: "validation_checks_total", Help: "Number of validation checks executed."},
+		prometheus.CounterOpts{Namespace: namespace, Name: "validation_checks_total", Help: "Number of validation checks reported in the current push."},
 		[]string{"drill", "provider", "environment"},
 	)
 	checksFailed := prometheus.NewCounterVec(
-		prometheus.CounterOpts{Namespace: namespace, Name: "validation_checks_failed", Help: "Number of validation checks failed."},
+		prometheus.CounterOpts{Namespace: namespace, Name: "validation_checks_failed", Help: "Number of validation checks failed in the current push."},
 		[]string{"drill", "provider", "environment"},
 	)
 	lastSuccess := prometheus.NewGaugeVec(
@@ -44,7 +44,7 @@ func PushResults(results []engine.DrillResult, pushgatewayURL string, labels map
 		[]string{"drill", "provider", "environment"},
 	)
 	runsTotal := prometheus.NewCounterVec(
-		prometheus.CounterOpts{Namespace: namespace, Name: "runs_total", Help: "Total drill executions."},
+		prometheus.CounterOpts{Namespace: namespace, Name: "runs_total", Help: "Drill executions reported in the current push."},
 		[]string{"drill", "provider", "environment", "status"},
 	)
 	registry.MustRegister(drillDuration, backupAge, validationPassed, checksTotal, checksFailed, lastSuccess, runsTotal)
@@ -108,7 +108,7 @@ func PushResults(results []engine.DrillResult, pushgatewayURL string, labels map
 		}).Inc()
 	}
 
-	if err := pusher.Add(); err != nil {
+	if err := pusher.Push(); err != nil {
 		return fmt.Errorf("push metrics: %w", err)
 	}
 

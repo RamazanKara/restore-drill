@@ -48,6 +48,29 @@ var supportedCheckTypes = map[string]struct{}{
 	"extensions": {},
 }
 
+var supportedCheckTypesByProvider = map[string]map[string]struct{}{
+	"postgres": {
+		"query":      {},
+		"sql":        {},
+		"schema":     {},
+		"freshness":  {},
+		"row_count":  {},
+		"extensions": {},
+	},
+	"mysql": {
+		"query":     {},
+		"sql":       {},
+		"schema":    {},
+		"freshness": {},
+		"row_count": {},
+	},
+	"redis": {
+		"query":      {},
+		"key_count":  {},
+		"key_sample": {},
+	},
+}
+
 var sqlBackedCheckTypes = map[string]struct{}{
 	"query":     {},
 	"sql":       {},
@@ -159,7 +182,7 @@ func validateConfig(cfg *Config) error {
 			}
 		}
 
-		if err := validateChecks(drill.Name, drill.Validate); err != nil {
+		if err := validateChecks(drill.Name, drill.Provider, drill.Validate); err != nil {
 			return err
 		}
 	}
@@ -168,7 +191,8 @@ func validateConfig(cfg *Config) error {
 }
 
 // validateChecks validates the check definitions for a drill.
-func validateChecks(drillName string, checks []Check) error {
+func validateChecks(drillName, provider string, checks []Check) error {
+	providerChecks := supportedCheckTypesByProvider[provider]
 	for i, check := range checks {
 		if check.Name == "" {
 			return fmt.Errorf("config: drill %q check[%d] must have a name", drillName, i)
@@ -176,6 +200,10 @@ func validateChecks(drillName string, checks []Check) error {
 
 		if _, ok := supportedCheckTypes[check.Type]; !ok {
 			return fmt.Errorf("config: drill %q check %q has unknown type %q", drillName, check.Name, check.Type)
+		}
+
+		if _, ok := providerChecks[check.Type]; !ok {
+			return fmt.Errorf("config: drill %q check %q has unsupported type %q for provider %q", drillName, check.Name, check.Type, provider)
 		}
 
 		if _, ok := sqlBackedCheckTypes[check.Type]; ok && check.SQL == "" {
