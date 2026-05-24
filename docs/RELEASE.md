@@ -1,10 +1,12 @@
 # Release Process
 
-restore-drill releases are tag driven. The canonical module is `github.com/RamazanKara/restore-drill`, and container images are published to `ghcr.io/ramazankara/restore-drill`.
+restore-drill releases are tag driven. The canonical module is
+`github.com/RamazanKara/restore-drill`, and container images are published to
+`ghcr.io/ramazankara/restore-drill`.
 
-## Local release checks
+## Release toolchain
 
-Install the local release toolchain first:
+Install these tools before running the full local release gate:
 
 - Go
 - Docker with Buildx
@@ -13,14 +15,26 @@ Install the local release toolchain first:
 - Syft, used by GoReleaser for SBOM generation
 - kind and kubectl for Kubernetes smoke tests
 
+## Local release gate
+
 ```bash
 make verify
 make docker-smoke
 make test-k8s
-RESTORE_DRILL_INTEGRATION=1 go test -race -count=1 -timeout=20m ./test/integration/...
+make test-integration
 goreleaser release --snapshot --clean --skip=publish
 cd dist && sha256sum -c checksums.txt
 ```
+
+`make verify` runs build, vet, race-enabled unit tests, lint, example
+validation, Helm lint/template, and `goreleaser check`.
+
+`make test-integration` runs real Docker restore fixtures for the supported
+provider matrix. `make test-k8s` runs the kind-backed Kubernetes smoke test.
+
+Do not commit `dist/`, local binaries, credentials, or real backup data.
+
+## GoReleaser note
 
 GoReleaser currently warns that its stable `dockers` and `docker_manifests`
 keys will eventually be replaced by `dockers_v2`. `dockers_v2` is still marked
@@ -34,17 +48,36 @@ git tag vX.Y.Z
 git push origin vX.Y.Z
 ```
 
-The release workflow builds binaries, checksums, SBOMs, and multi-architecture Docker images.
+The release workflow builds:
 
-## Before publishing v1.0.0
+- Linux and Darwin binaries for amd64 and arm64
+- archive checksums
+- SBOMs
+- multi-architecture GHCR images
+- `latest` and versioned container tags
 
-- README, examples, Helm chart, and release links use the `RamazanKara/restore-drill` namespace.
-- `make verify` passes in CI.
-- Docker integration tests pass for the README-supported provider matrix: compressed `pg_dump`, pgBackRest, WAL-G, compressed `mysqldump`, xtrabackup, mariabackup, Redis AOF, and Redis RDB.
-- Docker image smoke test passes.
-- Kubernetes smoke and integration coverage pass for the Helm CronJob runtime.
-- Helm lint/template passes with a real config and runtime customization coverage.
-- GoReleaser snapshot passes.
-- Release assets include checksums and SBOMs.
-- No credentials, real backup data, or generated binaries are committed.
+## Release hygiene
+
+Before publishing a tag:
+
+- README, examples, Helm chart, and release links use the
+  `RamazanKara/restore-drill` namespace.
+- GHCR references use lowercase `ghcr.io/ramazankara/restore-drill`.
 - Roadmap items are clearly marked as roadmap, not implied GA behavior.
+- `CHANGELOG.md` has an entry for the release.
+- Provider claims in README and docs are backed by tests or marked as roadmap.
+- Release assets include checksums and SBOMs.
+- No credentials, real backup data, generated binaries, or release artifacts are
+  committed.
+
+## Versioning
+
+restore-drill follows semantic versioning:
+
+- Patch releases fix bugs without changing public YAML, CLI, metrics, or JSON
+  contracts.
+- Minor releases add backward-compatible providers, checks, flags, report
+  fields, or Helm values.
+- Major releases are reserved for breaking public contracts.
+
+The v1 JSON result schema is documented in [REPORTING.md](REPORTING.md).

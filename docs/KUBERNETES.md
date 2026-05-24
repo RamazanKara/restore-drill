@@ -1,8 +1,12 @@
 # Kubernetes and Helm
 
-The Helm chart deploys restore-drill as a CronJob and runs the CLI with the Kubernetes runtime.
+The Helm chart deploys restore-drill as a CronJob. The CronJob runs
+`restore-drill run --runtime=kubernetes`, and each drill creates a short-lived
+restore target pod.
 
 ## Install
+
+Use inline config for simple deployments:
 
 ```bash
 helm install restore-drill deploy/helm/restore-drill \
@@ -11,9 +15,77 @@ helm install restore-drill deploy/helm/restore-drill \
   --set-file config.inline=drill.yaml
 ```
 
-The chart requires either `config.inline` or `config.existingConfigMap`; Helm rendering fails fast if neither is set.
+Or reference an existing ConfigMap that contains `drill.yaml`:
 
-For production, prefer secret-backed environment variables for backup credentials:
+```yaml
+config:
+  existingConfigMap: restore-drill-config
+```
+
+Helm rendering fails fast when neither `config.inline` nor
+`config.existingConfigMap` is set.
+
+## Runtime behavior
+
+- The CronJob pod runs the restore-drill CLI.
+- Restore target pods are created in the release namespace by default.
+- `runtime.namespace` can place restore target pods in another namespace.
+- `runtime.serviceAccountName`, `runtime.imagePullSecrets`,
+  `runtime.podLabels`, and `runtime.podAnnotations` apply to restore target
+  pods.
+- Top-level `serviceAccount`, `imagePullSecrets`, `podLabels`, and
+  `podAnnotations` apply to the CronJob pod.
+- `--no-cleanup` keeps the target pod for manual inspection and records the pod
+  ID in state and JSON output.
+
+## Values that matter most
+
+```yaml
+schedule: "0 3 * * *"
+concurrencyPolicy: Forbid
+activeDeadlineSeconds: 3600
+backoffLimit: 1
+
+runtime:
+  mode: kubernetes
+  namespace: ""
+  serviceAccountName: ""
+  imagePullSecrets: []
+  podLabels: {}
+  podAnnotations: {}
+
+config:
+  inline: ""
+  existingConfigMap: ""
+
+rbac:
+  create: true
+
+networkPolicy:
+  enabled: false
+  egress: []
+```
+
+Keep `concurrencyPolicy: Forbid` unless restore targets are independent and the
+cluster has enough resource headroom for overlapping drills.
+
+## RBAC
+
+With `rbac.create=true`, the chart creates a namespace-scoped Role and
+RoleBinding for:
+
+- pod create, get, list, watch, and delete
+- pod exec
+- pod logs
+
+If `runtime.namespace` differs from the release namespace, the Role and
+RoleBinding are created in `runtime.namespace`, and the subject references the
+CronJob service account in the release namespace.
+
+## Secrets and environment
+
+Prefer environment variables sourced from Kubernetes Secrets or workload
+identity. The config supports `${VAR}` interpolation before YAML parsing:
 
 ```yaml
 env:
@@ -29,49 +101,73 @@ env:
         key: secret-access-key
 ```
 
-## Runtime behavior
+Use `extraVolumes` and `extraVolumeMounts` for mounted backup files,
+certificates, or provider credentials.
 
-- The CronJob pod runs `restore-drill run --runtime=kubernetes`.
-- Restore targets are short-lived pods in the release namespace by default.
-- The chart creates a Role and RoleBinding for pod create/get/list/watch/delete, pod exec, and pod logs.
-- `runtime.namespace` can override where ephemeral restore pods are created.
-- `runtime.serviceAccountName`, `runtime.imagePullSecrets`, `runtime.podLabels`, and `runtime.podAnnotations` apply to the ephemeral restore pods created for each drill.
-- `--no-cleanup` keeps the target pod for manual inspection and records its ID in state/report output.
+## Restore target images
 
-## Values that matter most
+The restore target image comes from each drill's `restore.container.image`, not
+from the chart image. It must contain the provider runtime and selected backup
+tool:
 
-```yaml
-schedule: "0 3 * * *"
-runtime:
-  mode: kubernetes
-  namespace: ""
-  serviceAccountName: ""
-  imagePullSecrets: []
-  podLabels: {}
-  podAnnotations: {}
-config:
-  inline: ""
-  existingConfigMap: ""
-rbac:
-  create: true
-networkPolicy:
-  enabled: false
-```
+- PostgreSQL: `psql`, `pg_isready`, plus `pgbackrest`, `pg_restore`, or
+  `wal-g`/`walg` when selected
+- MySQL/MariaDB: `mysql` or `mariadb`, `mysqladmin` or `mariadb-admin`, plus
+  `xtrabackup` or `mariabackup` when selected
+- Redis: `redis-server` and `redis-cli`
 
-Enable `networkPolicy` only after adding egress rules for DNS, backup storage, and Pushgateway/webhook targets.
+Archive restores also need archive utilities such as `tar`, `gzip`, and
+`xbstream` depending on the backup format.
 
-Top-level `serviceAccount`, `imagePullSecrets`, `podLabels`, and `podAnnotations` configure the CronJob pod that runs restore-drill. The nested `runtime.*` values configure the short-lived database restore pods that restore-drill creates.
+## Network policy
+
+Enable `networkPolicy.enabled` only after adding egress for everything the
+CronJob and restore targets need:
+
+- DNS
+- object storage or backup repositories
+- Pushgateway
+- webhook endpoints
+- registry endpoints if images are pulled at runtime
+
+The default NetworkPolicy template allows DNS and appends
+`networkPolicy.egress`.
 
 ## Metrics
 
-restore-drill does not expose a long-lived metrics HTTP service in Kubernetes. The Helm chart runs it as a CronJob, and each job exits after pushing run results to the configured Prometheus Pushgateway.
+restore-drill does not expose a long-lived metrics HTTP service in Kubernetes.
+The Helm chart runs it as a CronJob, and each job exits after pushing run
+results to the configured Prometheus Pushgateway.
 
-If your cluster uses Prometheus Operator, enable or create a `ServiceMonitor` for the Pushgateway service itself. A `ServiceMonitor` for the restore-drill CronJob would not have a stable restore-drill endpoint to scrape.
+With Prometheus Operator, attach a `ServiceMonitor` to the Pushgateway service,
+not to restore-drill CronJob pods. A CronJob does not provide a stable
+restore-drill endpoint to scrape.
 
-## Image requirements
+Prometheus alert examples are documented in [REPORTING.md](REPORTING.md).
 
-The restore target image comes from each drill's `restore.container.image`, not from the chart image. It must contain the provider runtime and selected backup tool:
+## Troubleshooting
 
-- PostgreSQL: `psql`, `pg_isready`, plus `pgbackrest`, `pg_restore`, or `wal-g` when selected
-- MySQL/MariaDB: `mysql`, `mysqladmin`, plus `xtrabackup` or `mariabackup` when selected
-- Redis: `redis-server`, `redis-cli`
+Run a one-shot drill and retain the pod for inspection:
+
+```bash
+restore-drill run \
+  --runtime kubernetes \
+  --kube-namespace restore-drill \
+  --config drill.yaml \
+  --no-cleanup \
+  --format json
+```
+
+Then inspect the retained pod:
+
+```bash
+kubectl get pods -n restore-drill -l restore-drill/ephemeral=true
+kubectl logs -n restore-drill <pod-name>
+kubectl exec -n restore-drill -it <pod-name> -- sh
+```
+
+Delete retained pods after inspection:
+
+```bash
+kubectl delete pod -n restore-drill -l restore-drill/ephemeral=true
+```

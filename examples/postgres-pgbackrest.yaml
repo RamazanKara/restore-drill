@@ -41,6 +41,8 @@ drills:
         endpoint: http://pushgateway:9091
       - type: webhook
         url: ${RESTORE_DRILL_WEBHOOK_URL:-https://example.invalid/restore-drill-webhook}
+        headers:
+          Authorization: "Bearer ${RESTORE_DRILL_WEBHOOK_TOKEN:-replace-me}"
 
 metrics:
   prometheus:

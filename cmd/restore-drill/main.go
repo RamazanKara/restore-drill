@@ -1,10 +1,13 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
+	"sort"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -122,8 +125,13 @@ func runCmd() *cobra.Command {
 				return err
 			}
 
-			// Save state for 'status' command
-			saveState(results)
+			// Save state for 'status' command and configured file reports.
+			currentRun := saveState(results)
+
+			reportErr := writeConfiguredReports(cmd.Context(), cfg.Reporting, results, currentRun)
+			if reportErr != nil {
+				slog.Error("failed to write configured reports", "error", reportErr)
+			}
 
 			// Push metrics if configured
 			if cfg.Metrics.Prometheus.Enabled && cfg.Metrics.Prometheus.Pushgateway != "" {
@@ -141,6 +149,9 @@ func runCmd() *cobra.Command {
 			}
 			if failed {
 				return fmt.Errorf("one or more drills failed")
+			}
+			if reportErr != nil {
+				return reportErr
 			}
 			return nil
 		},
@@ -238,14 +249,19 @@ func buildReporter(format string, cfg *engine.Config) engine.Reporter {
 	seenWebhook := make(map[string]struct{})
 	for _, drill := range cfg.Drills {
 		for _, alert := range drill.Alerts {
-			if alert.Type != "webhook" || alert.URL == "" {
+			if alert.Type != "webhook" {
 				continue
 			}
-			if _, ok := seenWebhook[alert.URL]; ok {
+			url := webhookAlertURL(alert)
+			if url == "" {
 				continue
 			}
-			seenWebhook[alert.URL] = struct{}{}
-			reporters = append(reporters, reporter.NewWebhook(alert.URL, nil))
+			key := webhookAlertKey(url, alert.Headers)
+			if _, ok := seenWebhook[key]; ok {
+				continue
+			}
+			seenWebhook[key] = struct{}{}
+			reporters = append(reporters, reporter.NewWebhook(url, alert.Headers))
 		}
 	}
 
@@ -253,6 +269,33 @@ func buildReporter(format string, cfg *engine.Config) engine.Reporter {
 		return reporters[0]
 	}
 	return reporter.NewMulti(reporters...)
+}
+
+func webhookAlertURL(alert engine.AlertSpec) string {
+	if alert.URL != "" {
+		return alert.URL
+	}
+	return alert.Endpoint
+}
+
+func webhookAlertKey(url string, headers map[string]string) string {
+	if len(headers) == 0 {
+		return url
+	}
+	keys := make([]string, 0, len(headers))
+	for key := range headers {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	var b strings.Builder
+	b.WriteString(url)
+	for _, key := range keys {
+		b.WriteString("\n")
+		b.WriteString(key)
+		b.WriteString("=")
+		b.WriteString(headers[key])
+	}
+	return b.String()
 }
 
 func validateCmd() *cobra.Command {
@@ -276,10 +319,22 @@ func validateCmd() *cobra.Command {
 	return cmd
 }
 
-func saveState(results []engine.DrillResult) {
+func saveState(results []engine.DrillResult) *state.LastRun {
 	engine.SortResults(results)
+	run := stateRunFromResults(results, time.Now())
+
+	if err := state.Save(state.DefaultPath(), run); err != nil {
+		slog.Warn("failed to save state", "error", err)
+	}
+	if err := state.AppendHistory(run); err != nil {
+		slog.Warn("failed to append history", "error", err)
+	}
+	return run
+}
+
+func stateRunFromResults(results []engine.DrillResult, timestamp time.Time) *state.LastRun {
 	run := &state.LastRun{
-		Timestamp: time.Now(),
+		Timestamp: timestamp,
 		Results:   make([]state.RunResult, 0, len(results)),
 	}
 	for _, r := range results {
@@ -316,13 +371,114 @@ func saveState(results []engine.DrillResult) {
 		}
 		run.Results = append(run.Results, sr)
 	}
+	return run
+}
 
-	if err := state.Save(state.DefaultPath(), run); err != nil {
-		slog.Warn("failed to save state", "error", err)
+func writeConfiguredReports(ctx context.Context, cfg engine.ReportConfig, results []engine.DrillResult, currentRun *state.LastRun) error {
+	if strings.TrimSpace(cfg.Output) == "" {
+		return nil
 	}
-	if err := state.AppendHistory(run); err != nil {
-		slog.Warn("failed to append history", "error", err)
+	formats := configuredFileReportFormats(cfg.Format)
+	if len(formats) == 0 {
+		return nil
 	}
+	if currentRun == nil {
+		currentRun = stateRunFromResults(results, time.Now())
+	}
+
+	retention, err := cfg.RetentionDuration()
+	if err != nil {
+		return fmt.Errorf("parse reporting retention: %w", err)
+	}
+	since := currentRun.Timestamp.Add(-retention)
+	timestamp := currentRun.Timestamp.UTC().Format("20060102T150405Z")
+
+	for _, format := range formats {
+		path := configuredReportPath(cfg.Output, format, len(formats) > 1, timestamp)
+		if err := writeReportFile(path, func(w io.Writer) error {
+			switch format {
+			case "json":
+				return (&reporter.JSON{Writer: w, Pretty: true}).Report(ctx, results)
+			case "html":
+				runs, err := state.LoadHistory(since)
+				if err != nil {
+					return err
+				}
+				if len(runs) == 0 {
+					runs = []*state.LastRun{currentRun}
+				}
+				return reporter.RenderHTML(w, reporter.BuildComplianceReport(runs, since))
+			default:
+				return nil
+			}
+		}); err != nil {
+			return fmt.Errorf("write %s report: %w", format, err)
+		}
+		slog.Info("report written", "format", format, "path", path)
+	}
+	return nil
+}
+
+func configuredFileReportFormats(formats []string) []string {
+	seen := make(map[string]struct{})
+	fileFormats := make([]string, 0, len(formats))
+	for _, format := range formats {
+		switch format {
+		case "json", "html":
+			if _, ok := seen[format]; ok {
+				continue
+			}
+			seen[format] = struct{}{}
+			fileFormats = append(fileFormats, format)
+		}
+	}
+	return fileFormats
+}
+
+func configuredReportPath(output, format string, multiple bool, timestamp string) string {
+	rawOutput := strings.TrimSpace(output)
+	cleanOutput := filepath.Clean(rawOutput)
+	if reportOutputIsDir(rawOutput, cleanOutput, multiple) {
+		return filepath.Join(cleanOutput, configuredReportFilename(format, timestamp))
+	}
+	return cleanOutput
+}
+
+func reportOutputIsDir(rawOutput, cleanOutput string, multiple bool) bool {
+	if multiple {
+		return true
+	}
+	if strings.HasSuffix(rawOutput, "/") || strings.HasSuffix(rawOutput, string(os.PathSeparator)) {
+		return true
+	}
+	if info, err := os.Stat(cleanOutput); err == nil && info.IsDir() {
+		return true
+	}
+	return filepath.Ext(cleanOutput) == ""
+}
+
+func configuredReportFilename(format, timestamp string) string {
+	switch format {
+	case "html":
+		return "restore-drill-compliance-" + timestamp + ".html"
+	default:
+		return "restore-drill-run-" + timestamp + ".json"
+	}
+}
+
+func writeReportFile(path string, write func(io.Writer) error) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return fmt.Errorf("create report dir: %w", err)
+	}
+	f, err := os.Create(path) // #nosec G304 -- report output path is an explicit config value.
+	if err != nil {
+		return fmt.Errorf("create report file: %w", err)
+	}
+	renderErr := write(f)
+	if closeErr := f.Close(); closeErr != nil && renderErr == nil {
+		renderErr = fmt.Errorf("close report file: %w", closeErr)
+	}
+	return renderErr
 }
 
 func statusCmd() *cobra.Command {

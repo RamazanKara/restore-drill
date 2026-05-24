@@ -109,6 +109,51 @@ drills:
 	}
 }
 
+func TestParseConfig_AlertHeadersAndReportingRetention(t *testing.T) {
+	t.Setenv("WEBHOOK_TOKEN", "test-token")
+
+	yaml := `
+drills:
+  - name: test-pg
+    provider: postgres
+    backup:
+      tool: pg_dump
+      source: /backups/latest.sql
+    restore:
+      container:
+        image: postgres:16
+    checks:
+      - name: check
+        type: query
+        sql: "SELECT 1"
+        expect: "== 1"
+    alerts:
+      - type: webhook
+        url: https://hooks.example.invalid/restore-drill
+        headers:
+          Authorization: "Bearer ${WEBHOOK_TOKEN:-test-token}"
+reporting:
+  format: [json, html]
+  output: ./reports
+  retention: 14d
+`
+	cfg, err := ParseConfig([]byte(yaml))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	headers := cfg.Drills[0].Alerts[0].Headers
+	if headers["Authorization"] != "Bearer test-token" {
+		t.Fatalf("expected interpolated webhook header, got %#v", headers)
+	}
+	retention, err := cfg.Reporting.RetentionDuration()
+	if err != nil {
+		t.Fatalf("parse retention: %v", err)
+	}
+	if retention.Hours() != 14*24 {
+		t.Fatalf("expected 14d retention, got %s", retention)
+	}
+}
+
 func TestParseConfig_ProviderToolAliases(t *testing.T) {
 	tests := []struct {
 		name string
@@ -347,6 +392,54 @@ drills:
       - name: sample
         type: key_sample
         expect: exists
+`,
+		},
+		{
+			name: "webhook missing url",
+			yaml: `
+drills:
+  - name: test
+    provider: postgres
+    backup:
+      tool: pg_dump
+      source: /backups/latest.sql
+    restore:
+      container:
+        image: postgres:16
+    alerts:
+      - type: webhook
+`,
+		},
+		{
+			name: "unsupported report format",
+			yaml: `
+drills:
+  - name: test
+    provider: redis
+    backup:
+      tool: rdb
+      source: /backups/dump.rdb
+    restore:
+      container:
+        image: redis:7-alpine
+reporting:
+  format: [pdf]
+`,
+		},
+		{
+			name: "invalid report retention",
+			yaml: `
+drills:
+  - name: test
+    provider: redis
+    backup:
+      tool: rdb
+      source: /backups/dump.rdb
+    restore:
+      container:
+        image: redis:7-alpine
+reporting:
+  retention: 0d
 `,
 		},
 	}

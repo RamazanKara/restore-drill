@@ -60,9 +60,10 @@ type Check struct {
 
 // AlertSpec defines where to send alerts.
 type AlertSpec struct {
-	Type     string `yaml:"type"`
-	Endpoint string `yaml:"endpoint,omitempty"`
-	URL      string `yaml:"url,omitempty"`
+	Type     string            `yaml:"type"`
+	Endpoint string            `yaml:"endpoint,omitempty"`
+	URL      string            `yaml:"url,omitempty"`
+	Headers  map[string]string `yaml:"headers,omitempty"`
 }
 
 // Config is the top-level configuration.

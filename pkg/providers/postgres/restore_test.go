@@ -84,8 +84,32 @@ func TestRestoreWalGStagesLocalRepository(t *testing.T) {
 		t.Fatalf("expected WALG_FILE_PREFIX in fetch command, got %q", fetch)
 	}
 	recovery := rt.findShellCommandContaining("restore_command")
-	if !strings.Contains(recovery, "WALG_FILE_PREFIX=/mounted/walg wal-g wal-fetch %f %p") {
+	if !strings.Contains(recovery, "WALG_FILE_PREFIX=''/mounted/walg'' wal-g wal-fetch %f %p") {
 		t.Fatalf("expected WALG_FILE_PREFIX in restore_command, got %q", recovery)
+	}
+}
+
+func TestRestoreWalGUsesWalgBinaryAlias(t *testing.T) {
+	rt := &restoreRuntime{availableCommands: map[string]bool{
+		"walg": true,
+	}}
+	cfg := engine.BackupConfig{
+		Tool:   "walg",
+		Source: "/mounted/walg",
+	}
+
+	_, err := New().Restore(context.Background(), rt, cfg, restoreContainer{})
+	if err != nil {
+		t.Fatalf("restore walg: %v", err)
+	}
+
+	fetch := rt.findShellCommandContaining("walg backup-fetch /var/lib/postgresql/data LATEST")
+	if !strings.Contains(fetch, "WALG_FILE_PREFIX='/mounted/walg'") {
+		t.Fatalf("expected walg fetch command, got %q", fetch)
+	}
+	recovery := rt.findShellCommandContaining("restore_command")
+	if !strings.Contains(recovery, "WALG_FILE_PREFIX=''/mounted/walg'' walg wal-fetch %f %p") {
+		t.Fatalf("expected walg restore_command, got %q", recovery)
 	}
 }
 
@@ -133,7 +157,8 @@ func TestRestorePgBackRestMaterializesLocalArchive(t *testing.T) {
 }
 
 type restoreRuntime struct {
-	commands [][]string
+	commands          [][]string
+	availableCommands map[string]bool
 }
 
 func (r *restoreRuntime) Create(context.Context, engine.ContainerSpec) (engine.Container, error) {
@@ -143,6 +168,15 @@ func (r *restoreRuntime) Create(context.Context, engine.ContainerSpec) (engine.C
 func (r *restoreRuntime) Exec(_ context.Context, _ engine.Container, cmd []string) ([]byte, error) {
 	r.commands = append(r.commands, append([]string(nil), cmd...))
 	switch {
+	case len(cmd) == 3 && cmd[0] == "sh" && cmd[1] == "-c" && strings.HasPrefix(cmd[2], "command -v "):
+		if r.availableCommands == nil {
+			return []byte("ok"), nil
+		}
+		name := strings.Trim(strings.TrimPrefix(cmd[2], "command -v "), "'")
+		if r.availableCommands[name] {
+			return []byte("ok"), nil
+		}
+		return nil, io.ErrUnexpectedEOF
 	case len(cmd) > 2 && cmd[0] == "sh" && cmd[1] == "-c" && strings.Contains(cmd[2], "physical backup archive materialization"):
 		return []byte("/tmp/restore-drill-backups/pgbackrest-repo"), nil
 	case len(cmd) > 0 && cmd[0] == "pg_isready":

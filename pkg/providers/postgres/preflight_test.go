@@ -40,7 +40,26 @@ func TestPreflightRequiresPostgresTools(t *testing.T) {
 			name:      "wal-g requires wal-g binary",
 			tool:      "walg",
 			available: []string{"psql", "pg_isready", "pg_ctl"},
-			wantErr:   `required command "wal-g" not found`,
+			wantErr:   `required WAL-G (wal-g or walg) not found`,
+		},
+		{
+			name:      "wal-g accepts walg binary alias",
+			tool:      "walg",
+			available: []string{"psql", "pg_isready", "pg_ctl", "walg"},
+		},
+		{
+			name:      "wal-g archive source requires tar",
+			tool:      "wal-g",
+			source:    "/backups/walg.tar.gz",
+			available: []string{"psql", "pg_isready", "pg_ctl", "wal-g"},
+			wantErr:   `required command "tar" not found`,
+		},
+		{
+			name:      "compressed pg_dump requires gzip",
+			tool:      "pg_dump",
+			source:    "/backups/postgres.sql.gz",
+			available: []string{"psql", "pg_isready"},
+			wantErr:   `required command "gzip" not found`,
 		},
 		{
 			name:      "pg_restore requires pg_restore",

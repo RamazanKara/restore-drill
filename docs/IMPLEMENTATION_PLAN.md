@@ -1,15 +1,17 @@
-# v1.0 Release Readiness
+# Release Readiness and Roadmap
 
-restore-drill should reach v1.0 when it is excellent at one job: proving that real backups can be restored into disposable environments and validated with useful evidence.
+restore-drill is stable when it is excellent at one job: proving that real
+backups can be restored into disposable environments and validated with useful
+evidence.
 
 ## Product focus
 
-restore-drill is focused on restore verification:
+restore-drill verifies restores:
 
 - create an isolated restore target
 - stage backup artifacts from documented sources
-- restore with the configured provider/tool
-- validate the restored data
+- restore with the configured provider and tool
+- validate restored data
 - report RTO/RPO, validation evidence, retained-target details, and history
 - publish metrics and webhook notifications for operational follow-up
 
@@ -29,45 +31,74 @@ Non-goals:
 - Container image: `ghcr.io/ramazankara/restore-drill`
 - Supported providers: PostgreSQL, MySQL/MariaDB, Redis
 - Supported runtimes: Docker and Kubernetes
-- Supported outputs: stdout table, JSON, HTML compliance report, webhook, Prometheus Pushgateway
+- Supported outputs: stdout table, run JSON, HTML compliance report, webhook,
+  local history, Prometheus Pushgateway
 
-## v1.0 release gates
+## Release gates
+
+Every release should pass:
 
 - `make build`
 - `make vet`
 - `make test-unit`
 - `make lint`
 - `make check-examples`
-- `make helm-lint` with a real example config and Kubernetes runtime option render coverage
+- `make helm-lint`
 - `goreleaser check`
 - `make docker-smoke`
 - `goreleaser release --snapshot --clean --skip=publish`
-- `RESTORE_DRILL_INTEGRATION=1 go test -race -count=1 -timeout=20m ./test/integration/...`
+- `make test-integration`
 - `make test-k8s`
 
-The v1.0 tag is blocked unless CI proves every README-supported provider, runtime, example, Helm template, report format, and release artifact end to end.
+The release is not ready if README-supported provider, runtime, example, Helm,
+reporting, or release artifact behavior is not proven by CI or local release
+checks.
 
-## v1.0 hardening backlog
+## Completed hardening
 
-- Keep Docker integration coverage for generated logical fixtures and real physical/PITR flows: pgBackRest, WAL-G, xtrabackup, and mariabackup.
-- Keep physical backup archive staging for `.tar`, `.tar.gz`, `.tgz`, `.xbstream`, and `.xbstream.gz` covered for pgBackRest, xtrabackup, and mariabackup paths.
-- Keep generated Docker fixture coverage for compressed `pg_dump`, compressed `mysqldump`, Redis AOF, and Redis RDB green on every release.
-- Keep provider restore-path unit coverage for pgBackRest PITR, WAL-G PITR recovery config, `pg_restore`, xtrabackup, and mariabackup command construction.
-- Keep S3-compatible staging coverage for exact object downloads and latest-object prefix resolution.
-- Extend negative-path tests for missing credentials, staging failures, provider restore failures, and cleanup failures.
-- Add Kubernetes integration coverage for retained pods, namespace overrides, target pod service accounts, image pull secrets, resource settings, network policy, and failure cleanup.
-- Document JSON report compatibility guarantees and keep the current golden shape test updated.
-- Extend HTML report golden coverage around RTO/RPO summaries and compliance control rendering.
-- Confirm Pushgateway metrics are idempotent across repeated runs and document Prometheus alert examples.
-- Extend state/history durability tests around interrupted writes and malformed history entries.
-- Document upgrade policy, deprecation policy, and support windows.
-- Add release notes that clearly separate GA behavior from roadmap candidates.
+- Standardized project identity on `github.com/RamazanKara/restore-drill` and
+  `ghcr.io/ramazankara/restore-drill`.
+- Added explicit Docker/Kubernetes runtime selection.
+- Added shared local and S3-compatible backup staging.
+- Added provider capability preflight checks.
+- Added archive materialization for pgBackRest, WAL-G, xtrabackup, and
+  mariabackup restore paths.
+- Added Docker integration fixtures for compressed PostgreSQL/MySQL logical
+  dumps, pgBackRest, WAL-G, xtrabackup, mariabackup, Redis AOF, and Redis RDB.
+- Added Kubernetes smoke coverage for pod lifecycle, retained pods, and Helm
+  runtime options.
+- Added JSON report shape coverage and documented the v1 compatibility contract.
+- Added configured run report artifacts through `reporting.format` and
+  `reporting.output`.
+- Added per-check failure evidence to HTML compliance reports.
+- Added webhook headers and context-aware retry behavior.
+- Confirmed Pushgateway replacement behavior for repeated CronJob runs.
+- Made latest-run and history persistence atomic.
+- Added state history coverage for malformed entries.
 
-## Roadmap candidates after v1.0
+## Active hardening backlog
 
-- Standalone object-store restore drills
+- Keep Docker integration coverage green for generated logical fixtures and
+  physical/PITR flows.
+- Keep archive staging coverage green for `.tar`, `.tar.gz`, `.tgz`,
+  `.xbstream`, and `.xbstream.gz`.
+- Extend negative-path tests for missing credentials, staging failures, provider
+  restore failures, and cleanup failures.
+- Add broader Kubernetes integration coverage for namespace overrides, target
+  pod service accounts, image pull secrets, resource settings, network policy,
+  and failure cleanup.
+- Add upgrade, deprecation, and support-window policy details before the next
+  major release.
+- Move GoReleaser Docker configuration to `dockers_v2` once the replacement is
+  no longer experimental for the project's release needs.
+
+## Roadmap candidates
+
+These are future candidates, not current GA claims:
+
+- standalone object-store restore drills
 - etcd snapshot restore drills
 - ClickHouse and MongoDB providers
 - Velero restore validation
 - PITR fuzzing
-- Multi-region restore drills
+- multi-region restore drills

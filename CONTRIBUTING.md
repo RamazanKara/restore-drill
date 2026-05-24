@@ -12,7 +12,9 @@ make test-unit
 make lint
 ```
 
-Use `make verify` before opening a pull request when Helm and GoReleaser are installed locally.
+Use `make verify` before opening a pull request when Helm and GoReleaser are
+installed locally. For provider or runtime changes, also run the relevant
+integration gate when Docker or kind is available.
 
 ## Pull requests
 
@@ -20,13 +22,20 @@ Use `make verify` before opening a pull request when Helm and GoReleaser are ins
 - Add or update tests for provider, runtime, config, metrics, or reporter changes.
 - Update examples and docs when changing public YAML, CLI flags, metrics, or release behavior.
 - Do not commit generated release artifacts, local binaries, credentials, or real backup data.
+- Keep roadmap candidates clearly separate from GA behavior in README and docs.
 
 ## Integration tests
 
 Docker-backed integration tests are opt-in because they create containers:
 
 ```bash
-RESTORE_DRILL_INTEGRATION=1 go test -race -count=1 -timeout=10m ./test/integration/...
+make test-integration
 ```
 
 Provider changes should include either unit coverage with a fake runtime or an integration fixture that exercises the documented restore path.
+
+## Documentation
+
+Start with [docs/README.md](docs/README.md) to find the right page. README
+should stay concise; detailed behavior belongs in the focused docs under
+`docs/`.

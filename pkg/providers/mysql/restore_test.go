@@ -71,6 +71,26 @@ func TestRestoreMariabackupRunsPrepareCopyBackAndRestart(t *testing.T) {
 	}
 }
 
+func TestRestoreMysqldumpUsesMariaDBClientAlias(t *testing.T) {
+	rt := &restoreRuntime{availableCommands: map[string]bool{
+		"mariadb":       true,
+		"mariadb-admin": true,
+	}}
+
+	_, err := New().Restore(context.Background(), rt, engine.BackupConfig{
+		Tool:   "mysqldump",
+		Source: "/mounted/mysql.sql",
+	}, restoreContainer{})
+	if err != nil {
+		t.Fatalf("restore mysqldump: %v", err)
+	}
+
+	restore := rt.findShellCommandContaining("'mariadb' -u root < '/mounted/mysql.sql'")
+	if restore == "" {
+		t.Fatalf("expected mariadb restore command, got %v", rt.commands)
+	}
+}
+
 func TestRestoreXtrabackupMaterializesArchiveBeforePrepare(t *testing.T) {
 	rt := &restoreRuntime{}
 
@@ -96,8 +116,9 @@ func TestRestoreXtrabackupMaterializesArchiveBeforePrepare(t *testing.T) {
 }
 
 type restoreRuntime struct {
-	commands [][]string
-	stopped  bool
+	commands          [][]string
+	stopped           bool
+	availableCommands map[string]bool
 }
 
 func (r *restoreRuntime) Create(context.Context, engine.ContainerSpec) (engine.Container, error) {
@@ -107,14 +128,23 @@ func (r *restoreRuntime) Create(context.Context, engine.ContainerSpec) (engine.C
 func (r *restoreRuntime) Exec(_ context.Context, _ engine.Container, cmd []string) ([]byte, error) {
 	r.commands = append(r.commands, append([]string(nil), cmd...))
 	switch {
+	case len(cmd) == 3 && cmd[0] == "sh" && cmd[1] == "-c" && strings.HasPrefix(cmd[2], "command -v "):
+		if r.availableCommands == nil {
+			return []byte("ok"), nil
+		}
+		name := strings.Trim(strings.TrimPrefix(cmd[2], "command -v "), "'")
+		if r.availableCommands[name] {
+			return []byte("ok"), nil
+		}
+		return nil, errors.New("not found")
 	case len(cmd) > 2 && cmd[0] == "sh" && cmd[1] == "-c" && strings.Contains(cmd[2], "physical backup archive materialization"):
 		return []byte("/tmp/restore-drill-backups/mysql-physical"), nil
-	case len(cmd) > 0 && cmd[0] == "mysqladmin" && slices.Contains(cmd, "ping"):
+	case len(cmd) > 0 && (cmd[0] == "mysqladmin" || cmd[0] == "mariadb-admin") && slices.Contains(cmd, "ping"):
 		if r.stopped {
 			return nil, errors.New("mysql is stopped")
 		}
 		return []byte("mysqld is alive"), nil
-	case len(cmd) > 0 && cmd[0] == "mysqladmin" && slices.Contains(cmd, "shutdown"):
+	case len(cmd) > 0 && (cmd[0] == "mysqladmin" || cmd[0] == "mariadb-admin") && slices.Contains(cmd, "shutdown"):
 		r.stopped = true
 		return []byte("ok"), nil
 	case len(cmd) > 2 && cmd[0] == "sh" && cmd[1] == "-c" && strings.Contains(cmd[2], "mysqld_safe"):

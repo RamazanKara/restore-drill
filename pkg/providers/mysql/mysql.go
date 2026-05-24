@@ -33,6 +33,10 @@ func (p *Provider) Preflight(ctx context.Context, rt engine.Runtime, cfg engine.
 
 	required := make([]string, 0)
 	switch cfg.Tool {
+	case "mysqldump":
+		if strings.HasSuffix(configuredBackupPath(cfg), ".gz") {
+			required = append(required, "gzip")
+		}
 	case "xtrabackup":
 		required = append(required, "xtrabackup")
 		if err := commandExistsAny(ctx, rt, target, "mysql safe launcher", "mysqld_safe", "mariadbd-safe"); err != nil {
@@ -161,9 +165,14 @@ func (p *Provider) restoreMysqldump(ctx context.Context, rt engine.Runtime, cfg 
 		return nil, err
 	}
 
-	restoreCmd := fmt.Sprintf("mysql -u root < %s", shellQuote(staged.Path))
+	client, err := firstAvailableCommand(ctx, rt, target, "mysql", "mariadb")
+	if err != nil {
+		return nil, err
+	}
+
+	restoreCmd := fmt.Sprintf("%s -u root < %s", shellQuote(client), shellQuote(staged.Path))
 	if strings.HasSuffix(staged.Path, ".gz") {
-		restoreCmd = fmt.Sprintf("gzip -dc %s | mysql -u root", shellQuote(staged.Path))
+		restoreCmd = fmt.Sprintf("gzip -dc %s | %s -u root", shellQuote(staged.Path), shellQuote(client))
 	}
 
 	cmd := []string{"sh", "-c", restoreCmd}

@@ -14,17 +14,25 @@ import (
 
 // Webhook sends drill results as JSON to an HTTP endpoint.
 type Webhook struct {
-	URL     string
-	Headers map[string]string
-	Timeout time.Duration
+	URL          string
+	Headers      map[string]string
+	Timeout      time.Duration
+	MaxAttempts  int
+	RetryBackoff time.Duration
 }
 
 // NewWebhook creates a webhook reporter.
 func NewWebhook(url string, headers map[string]string) *Webhook {
+	copiedHeaders := make(map[string]string, len(headers))
+	for k, v := range headers {
+		copiedHeaders[k] = v
+	}
 	return &Webhook{
-		URL:     url,
-		Headers: headers,
-		Timeout: 30 * time.Second,
+		URL:          url,
+		Headers:      copiedHeaders,
+		Timeout:      30 * time.Second,
+		MaxAttempts:  3,
+		RetryBackoff: 2 * time.Second,
 	}
 }
 
@@ -122,11 +130,22 @@ func (w *Webhook) Report(ctx context.Context, results []engine.DrillResult) erro
 
 	client := &http.Client{Timeout: w.Timeout}
 
-	// Retry up to 3 times on 5xx errors.
+	maxAttempts := w.MaxAttempts
+	if maxAttempts <= 0 {
+		maxAttempts = 3
+	}
+	retryBackoff := w.RetryBackoff
+	if retryBackoff <= 0 {
+		retryBackoff = 2 * time.Second
+	}
+
+	// Retry on transport errors and 5xx responses.
 	var lastErr error
-	for attempt := 0; attempt < 3; attempt++ {
+	for attempt := 0; attempt < maxAttempts; attempt++ {
 		if attempt > 0 {
-			time.Sleep(time.Duration(attempt) * 2 * time.Second)
+			if err := sleepContext(ctx, time.Duration(attempt)*retryBackoff); err != nil {
+				return fmt.Errorf("webhook retry wait: %w", err)
+			}
 		}
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, w.URL, bytes.NewReader(body))
@@ -161,4 +180,15 @@ func (w *Webhook) Report(ctx context.Context, results []engine.DrillResult) erro
 	}
 
 	return lastErr
+}
+
+func sleepContext(ctx context.Context, d time.Duration) error {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }

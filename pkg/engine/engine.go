@@ -229,12 +229,25 @@ func (e *Engine) executeDrill(ctx context.Context, drill DrillConfig) DrillResul
 
 		// Get actual value from validation result
 		if valResult != nil && i < len(valResult.Checks) {
-			cr.Actual = valResult.Checks[i].Actual
+			providerCheck := valResult.Checks[i]
+			cr.Actual = providerCheck.Actual
+			if providerCheck.Duration > 0 {
+				cr.Duration = providerCheck.Duration
+			}
+			if providerCheck.Error != nil {
+				cr.Error = providerCheck.Error
+				cr.Passed = false
+				allPassed = false
+				result.Checks = append(result.Checks, cr)
+				continue
+			}
 		}
 
 		passed, evalErr := EvalExpression(check.Expect, cr.Actual)
 		cr.Passed = passed
-		cr.Duration = time.Since(start)
+		if cr.Duration == 0 {
+			cr.Duration = time.Since(start)
+		}
 		if evalErr != nil {
 			cr.Error = evalErr
 			cr.Passed = false

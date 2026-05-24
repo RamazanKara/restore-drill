@@ -29,6 +29,13 @@ func TestPreflightRequiresMySQLTools(t *testing.T) {
 			available: []string{"mariadb", "mariadb-admin"},
 		},
 		{
+			name:      "compressed mysqldump requires gzip",
+			tool:      "mysqldump",
+			source:    "/backups/mysql.sql.gz",
+			available: []string{"mysql", "mysqladmin"},
+			wantErr:   `required command "gzip" not found`,
+		},
+		{
 			name:      "xtrabackup requires xtrabackup",
 			tool:      "xtrabackup",
 			available: []string{"mysql", "mysqladmin", "mysqld_safe"},

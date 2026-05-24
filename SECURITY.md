@@ -22,3 +22,5 @@ Include:
 - Do not put credentials directly in drill config.
 - Use environment interpolation, Kubernetes Secrets, workload identity, or cloud-native credentials.
 - Redact backup URLs and command output before sharing logs.
+- Treat `--no-cleanup` restore targets and generated reports as sensitive when
+  they may contain restored production-like data.

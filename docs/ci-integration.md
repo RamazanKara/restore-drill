@@ -1,49 +1,64 @@
-# CI/CD Integration
+# CI/CD and Scheduled Drills
 
-Run `restore-drill` in your CI/CD pipeline to continuously prove backup recovery works.
-A non-zero exit code signals a failed drill, which can gate deployments.
+Run `restore-drill` on a schedule or after deployments to continuously prove
+backup recovery works. A non-zero exit code means one or more drills failed and
+can gate a pipeline.
 
 ## GitHub Actions
 
+Docker is available on `ubuntu-latest`, so the simplest workflow uses the Docker
+runtime directly:
+
 ```yaml
 name: Backup Drill
+
 on:
   schedule:
-    - cron: '0 6 * * *'  # daily at 06:00 UTC
+    - cron: "0 6 * * *"
   workflow_dispatch: {}
 
 jobs:
   restore-drill:
     runs-on: ubuntu-latest
-    services:
-      docker:
-        image: docker:dind
-        options: --privileged
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.x"
+
       - name: Install restore-drill
-        run: |
-          curl -sSfL https://github.com/RamazanKara/restore-drill/releases/latest/download/restore-drill_linux_amd64.tar.gz | tar xz
-          sudo mv restore-drill /usr/local/bin/
+        run: go install github.com/RamazanKara/restore-drill/cmd/restore-drill@latest
 
       - name: Run backup verification
         run: restore-drill run --config drill.yaml --runtime docker --format json
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          RESTORE_DRILL_WEBHOOK_TOKEN: ${{ secrets.RESTORE_DRILL_WEBHOOK_TOKEN }}
 
       - name: Generate compliance report
         if: always()
-        run: restore-drill report --last 90 --output report.html
+        run: restore-drill report --last 90 --output compliance-report.html
 
       - name: Upload report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: compliance-report
-          path: report.html
+          name: restore-drill-report
+          path: compliance-report.html
 ```
+
+For scheduled evidence files from every run, configure:
+
+```yaml
+reporting:
+  format: [json, html]
+  output: ./reports/
+  retention: 90d
+```
+
+Then upload `reports/**` as an artifact.
 
 ## GitLab CI
 
@@ -55,24 +70,27 @@ backup-drill:
     - docker:dind
   variables:
     DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
   before_script:
-    - apk add --no-cache curl
-    - curl -sSfL https://github.com/RamazanKara/restore-drill/releases/latest/download/restore-drill_linux_amd64.tar.gz | tar xz
-    - mv restore-drill /usr/local/bin/
+    - apk add --no-cache go git
+    - go install github.com/RamazanKara/restore-drill/cmd/restore-drill@latest
+    - export PATH="$(go env GOPATH)/bin:$PATH"
   script:
-    - restore-drill run --config drill.yaml --runtime docker
+    - restore-drill run --config drill.yaml --runtime docker --format json
+    - restore-drill report --last 90 --output compliance-report.html
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
     - if: $CI_PIPELINE_SOURCE == "web"
   artifacts:
     when: always
     paths:
-      - report.html
+      - compliance-report.html
+      - reports/
 ```
 
-## ArgoCD Post-Sync Hook
+## ArgoCD post-sync hook
 
-Run a drill after every deployment to verify backups are still restorable:
+Run a one-shot Kubernetes runtime drill after a deployment:
 
 ```yaml
 apiVersion: batch/v1
@@ -87,6 +105,7 @@ spec:
   template:
     spec:
       serviceAccountName: restore-drill
+      restartPolicy: Never
       containers:
         - name: drill
           image: ghcr.io/ramazankara/restore-drill:latest
@@ -94,9 +113,6 @@ spec:
           volumeMounts:
             - name: config
               mountPath: /config
-          env:
-            - name: AWS_REGION
-              value: eu-central-1
           envFrom:
             - secretRef:
                 name: backup-credentials
@@ -104,86 +120,59 @@ spec:
         - name: config
           configMap:
             name: restore-drill-config
-      restartPolicy: Never
 ```
 
-## Kubernetes CronJob
+For routine Kubernetes schedules, prefer the Helm chart documented in
+[KUBERNETES.md](KUBERNETES.md).
 
-Schedule drills as a Kubernetes CronJob (included in the Helm chart):
+## Incident mode
 
-```yaml
-apiVersion: batch/v1
-kind: CronJob
-metadata:
-  name: restore-drill
-spec:
-  schedule: "0 4 * * *"
-  jobTemplate:
-    spec:
-      template:
-        spec:
-          serviceAccountName: restore-drill
-          containers:
-            - name: drill
-              image: ghcr.io/ramazankara/restore-drill:latest
-              args: ["run", "--config", "/config/drill.yaml", "--runtime", "kubernetes"]
-              volumeMounts:
-                - name: config
-                  mountPath: /config
-          volumes:
-            - name: config
-              configMap:
-                name: restore-drill-config
-          restartPolicy: OnFailure
-```
-
-## One-Shot Incident Mode
-
-During an incident, verify a specific point-in-time recovery:
+During an incident, verify a specific point-in-time restore and retain the
+target for inspection:
 
 ```bash
-# Restore to a specific timestamp and keep the container running for inspection
 restore-drill run \
   --config drill.yaml \
-  --target "2024-01-15T10:30:00Z" \
-  --no-cleanup
+  --runtime docker \
+  --target "2026-05-20T14:30:00Z" \
+  --no-cleanup \
+  --format json
+```
 
-# Connect to the running container
+The `--target` flag overrides `restore.target` for all drills in the config.
+The `--no-cleanup` flag keeps the target running and includes connection details
+in JSON/state output.
+
+Docker inspection example:
+
+```bash
 docker exec -it <container-id> psql -U postgres
 ```
 
-The `--target` flag overrides the PITR target for all drills in the config.
-The `--no-cleanup` flag keeps containers running so you can inspect the restored data.
-
-## Compliance Reports
-
-Generate compliance reports aggregating drill history:
+Kubernetes inspection example:
 
 ```bash
-# HTML report for the last 90 days (default)
-restore-drill report --last 90 --output compliance-report.html
+kubectl exec -n restore-drill -it <pod-name> -- sh
+```
 
-# JSON format for programmatic consumption
+## Reports
+
+Generate compliance reports from local history:
+
+```bash
+restore-drill report --last 90 --output compliance-report.html
 restore-drill report --format json --last 30
 ```
 
-Reports map drill outcomes to compliance controls:
+HTML reports include per-check failure evidence with expected values, actual
+values, and provider errors. The report contract is documented in
+[REPORTING.md](REPORTING.md).
 
-| Framework       | Control      | Description                              |
-|-----------------|--------------|------------------------------------------|
-| ISO 27001:2022  | A.8.13       | Information backup — restore testing     |
-| NIS2 Directive  | Art. 21(2)(c)| Business continuity — backup verification|
-| BSI C5:2020     | OPS-04       | Data backup concept — regular restore tests |
-| BSI C5:2020     | OPS-05       | Recovery time objectives                 |
-| SOC 2           | A1.2         | Recovery testing                         |
-
-HTML reports also include per-check failure evidence with the expected value, actual value, and provider error so failed drills can be reviewed without digging through raw job logs first.
-
-## Exit Codes
+## Exit codes
 
 | Code | Meaning |
-|------|---------|
-| 0    | All drills passed |
-| 1    | One or more drills failed validation |
+| --- | --- |
+| 0 | All drills passed. |
+| 1 | One or more drills failed validation, restore, reporting, or configuration. |
 
-Use the exit code in CI to gate deployments or trigger alerts.
+Use the exit code to gate deployments or trigger alerts.

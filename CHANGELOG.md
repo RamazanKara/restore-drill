@@ -6,6 +6,18 @@ The format is based on Keep a Changelog, and this project uses semantic versioni
 
 ## [Unreleased]
 
+### Added
+
+- Added configured run report artifacts: `reporting.format: [json, html]` with `reporting.output` now writes per-run JSON and compliance HTML files.
+- Added webhook alert headers for authenticated delivery.
+- Added reporting documentation covering JSON compatibility, webhook payloads, and Prometheus alert examples.
+- Added a documentation index and refactored README, configuration, Kubernetes, production, release, CI/CD, architecture, and roadmap docs around the current v1 scope.
+
+### Changed
+
+- Hardened webhook retries with context-aware waits and explicit retry coverage.
+- Extended state history tests for malformed history entries.
+
 ## [1.0.0] - 2026-05-24
 
 ### Changed

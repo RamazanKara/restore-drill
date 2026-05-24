@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -78,6 +79,19 @@ var sqlBackedCheckTypes = map[string]struct{}{
 	"freshness": {},
 	"row_count": {},
 }
+
+var supportedAlertTypes = map[string]struct{}{
+	"webhook":    {},
+	"prometheus": {},
+}
+
+var supportedReportFormats = map[string]struct{}{
+	"table": {},
+	"json":  {},
+	"html":  {},
+}
+
+const defaultReportRetention = 90 * 24 * time.Hour
 
 // LoadConfig reads and parses a drill config from the given file path.
 func LoadConfig(path string) (*Config, error) {
@@ -185,6 +199,13 @@ func validateConfig(cfg *Config) error {
 		if err := validateChecks(drill.Name, drill.Provider, drill.Validate); err != nil {
 			return err
 		}
+		if err := validateAlerts(drill.Name, drill.Alerts); err != nil {
+			return err
+		}
+	}
+
+	if err := validateReporting(cfg.Reporting); err != nil {
+		return err
 	}
 
 	return nil
@@ -219,6 +240,66 @@ func validateChecks(drillName, provider string, checks []Check) error {
 		}
 	}
 	return nil
+}
+
+func validateAlerts(drillName string, alerts []AlertSpec) error {
+	for i, alert := range alerts {
+		if alert.Type == "" {
+			return fmt.Errorf("config: drill %q alert[%d] must have a type", drillName, i)
+		}
+		if _, ok := supportedAlertTypes[alert.Type]; !ok {
+			return fmt.Errorf("config: drill %q alert[%d] has unsupported type %q", drillName, i, alert.Type)
+		}
+		switch alert.Type {
+		case "webhook":
+			if alert.URL == "" && alert.Endpoint == "" {
+				return fmt.Errorf("config: drill %q webhook alert[%d] must specify url or endpoint", drillName, i)
+			}
+		}
+		for key := range alert.Headers {
+			if strings.TrimSpace(key) == "" {
+				return fmt.Errorf("config: drill %q alert[%d] has an empty header name", drillName, i)
+			}
+		}
+	}
+	return nil
+}
+
+func validateReporting(reporting ReportConfig) error {
+	for _, format := range reporting.Format {
+		if _, ok := supportedReportFormats[format]; !ok {
+			return fmt.Errorf("config: reporting.format has unsupported value %q", format)
+		}
+	}
+	if reporting.Retention != "" {
+		if _, err := reporting.RetentionDuration(); err != nil {
+			return fmt.Errorf("config: reporting.retention %q: %w", reporting.Retention, err)
+		}
+	}
+	return nil
+}
+
+// RetentionDuration returns the reporting retention window.
+func (r ReportConfig) RetentionDuration() (time.Duration, error) {
+	retention := strings.TrimSpace(r.Retention)
+	if retention == "" {
+		return defaultReportRetention, nil
+	}
+	if strings.HasSuffix(retention, "d") {
+		days, err := strconv.ParseInt(strings.TrimSuffix(retention, "d"), 10, 64)
+		if err != nil || days <= 0 {
+			return 0, fmt.Errorf("must be a positive day count or duration")
+		}
+		return time.Duration(days) * 24 * time.Hour, nil
+	}
+	dur, err := time.ParseDuration(retention)
+	if err != nil {
+		return 0, err
+	}
+	if dur <= 0 {
+		return 0, fmt.Errorf("must be positive")
+	}
+	return dur, nil
 }
 
 // DrillTimeout returns the parsed timeout or a default of 10 minutes.

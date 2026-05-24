@@ -88,3 +88,49 @@ func TestAppendHistoryConcurrentSameTimestampKeepsEveryRun(t *testing.T) {
 		t.Fatalf("expected %d loaded runs, got %d", runs, len(loaded))
 	}
 }
+
+func TestLoadHistorySkipsMalformedEntriesAndSortsRuns(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	dir := HistoryDir()
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatalf("create history dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "broken.json"), []byte("{"), 0o600); err != nil {
+		t.Fatalf("write malformed history: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "notes.txt"), []byte("ignore me"), 0o600); err != nil {
+		t.Fatalf("write ignored history file: %v", err)
+	}
+
+	older := &LastRun{
+		Timestamp: time.Date(2026, 5, 20, 14, 0, 0, 0, time.UTC),
+		Results: []RunResult{
+			{Name: "older", Provider: "postgres", ValidationPassed: true},
+		},
+	}
+	newer := &LastRun{
+		Timestamp: time.Date(2026, 5, 20, 15, 0, 0, 0, time.UTC),
+		Results: []RunResult{
+			{Name: "newer", Provider: "redis", ValidationPassed: true},
+		},
+	}
+	if err := Save(filepath.Join(dir, "newer.json"), newer); err != nil {
+		t.Fatalf("write newer history: %v", err)
+	}
+	if err := Save(filepath.Join(dir, "older.json"), older); err != nil {
+		t.Fatalf("write older history: %v", err)
+	}
+
+	loaded, err := LoadHistory(time.Date(2026, 5, 20, 13, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("load history: %v", err)
+	}
+	if len(loaded) != 2 {
+		t.Fatalf("expected 2 valid history entries, got %d", len(loaded))
+	}
+	if loaded[0].Results[0].Name != "older" || loaded[1].Results[0].Name != "newer" {
+		t.Fatalf("history was not sorted by timestamp: %#v", loaded)
+	}
+}

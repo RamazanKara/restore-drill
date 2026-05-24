@@ -68,6 +68,31 @@ func TestEngineCleansUpAfterValidationFailure(t *testing.T) {
 	}
 }
 
+func TestEnginePreservesProviderCheckErrors(t *testing.T) {
+	rt := &lifecycleRuntime{}
+	provider := &lifecycleProvider{checkErr: errors.New("query failed")}
+	engine := New(rt, &captureReporter{})
+	engine.RegisterProvider(provider)
+
+	result := engine.executeDrill(context.Background(), lifecycleDrill("check-error"))
+
+	if result.Error != nil {
+		t.Fatalf("expected check failure to stay in check result, got top-level error %v", result.Error)
+	}
+	if result.ValidationPassed {
+		t.Fatal("expected validation to fail")
+	}
+	if len(result.Checks) != 1 {
+		t.Fatalf("expected one check result, got %d", len(result.Checks))
+	}
+	if result.Checks[0].Error == nil || !strings.Contains(result.Checks[0].Error.Error(), "query failed") {
+		t.Fatalf("expected provider check error to be preserved, got %#v", result.Checks[0])
+	}
+	if result.Checks[0].Passed {
+		t.Fatalf("expected errored check not to pass: %#v", result.Checks[0])
+	}
+}
+
 func TestEngineNoCleanupRetainsTargetDetails(t *testing.T) {
 	rt := &lifecycleRuntime{}
 	provider := &lifecycleProvider{}
@@ -249,6 +274,7 @@ type lifecycleProvider struct {
 	preflightErr  error
 	restoreErr    error
 	validateErr   error
+	checkErr      error
 	restoreDelays map[string]time.Duration
 	cleanupCalls  int
 }
@@ -291,6 +317,7 @@ func (p *lifecycleProvider) Validate(_ context.Context, _ Runtime, _ Container, 
 			Name:   check.Name,
 			Type:   check.Type,
 			Actual: "1",
+			Error:  p.checkErr,
 		})
 	}
 	return &ValidationResult{Checks: results}, nil

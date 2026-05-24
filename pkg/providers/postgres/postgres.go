@@ -32,8 +32,16 @@ func (p *Provider) Preflight(ctx context.Context, rt engine.Runtime, cfg engine.
 		required = append(required, backup.ArchiveRequirements(configuredBackupPath(cfg))...)
 	case "pg_restore":
 		required = append(required, "pg_restore")
+	case "pg_dump":
+		if strings.HasSuffix(configuredBackupPath(cfg), ".gz") {
+			required = append(required, "gzip")
+		}
 	case "wal-g", "walg":
-		required = append(required, "pg_ctl", "wal-g")
+		required = append(required, "pg_ctl")
+		required = append(required, backup.ArchiveRequirements(configuredBackupPath(cfg))...)
+		if err := commandExistsAny(ctx, rt, target, "WAL-G", "wal-g", "walg"); err != nil {
+			return err
+		}
 	}
 	for _, cmd := range required {
 		if err := commandExists(ctx, rt, target, cmd); err != nil {
@@ -247,6 +255,11 @@ func (p *Provider) restorePgDump(ctx context.Context, rt engine.Runtime, cfg eng
 func (p *Provider) restoreWalG(ctx context.Context, rt engine.Runtime, cfg engine.BackupConfig, target engine.Container, start time.Time) (*engine.RestoreResult, error) {
 	slog.Info("restoring via wal-g", "source", cfg.Source)
 
+	walGBin, err := firstAvailableCommand(ctx, rt, target, "wal-g", "walg")
+	if err != nil {
+		return nil, err
+	}
+
 	if err := p.stopPostgresIfRunning(ctx, rt, target); err != nil {
 		return nil, err
 	}
@@ -267,12 +280,12 @@ func (p *Provider) restoreWalG(ctx context.Context, rt engine.Runtime, cfg engin
 		return nil, fmt.Errorf("clear postgres data directory: %w", err)
 	}
 
-	cmd := []string{"wal-g", "backup-fetch", "/var/lib/postgresql/data", "LATEST"}
-	restoreCommand := "wal-g wal-fetch %f %p"
+	cmd := []string{walGBin, "backup-fetch", "/var/lib/postgresql/data", "LATEST"}
+	restoreCommand := walGBin + " wal-fetch %f %p"
 	if repoPath != "" {
 		env := "WALG_FILE_PREFIX=" + shellQuote(repoPath) + " "
-		cmd = []string{"sh", "-c", env + "wal-g backup-fetch /var/lib/postgresql/data LATEST"}
-		restoreCommand = "WALG_FILE_PREFIX=" + repoPath + " wal-g wal-fetch %f %p"
+		cmd = []string{"sh", "-c", env + walGBin + " backup-fetch /var/lib/postgresql/data LATEST"}
+		restoreCommand = "WALG_FILE_PREFIX=" + shellQuote(repoPath) + " " + walGBin + " wal-fetch %f %p"
 	}
 	out, err := rt.Exec(ctx, target, cmd)
 	if err != nil {
@@ -391,6 +404,22 @@ func commandExists(ctx context.Context, rt engine.Runtime, target engine.Contain
 		return fmt.Errorf("required command %q not found in restore image", name)
 	}
 	return nil
+}
+
+func commandExistsAny(ctx context.Context, rt engine.Runtime, target engine.Container, label string, names ...string) error {
+	if _, err := firstAvailableCommand(ctx, rt, target, names...); err == nil {
+		return nil
+	}
+	return fmt.Errorf("required %s (%s) not found in restore image", label, strings.Join(names, " or "))
+}
+
+func firstAvailableCommand(ctx context.Context, rt engine.Runtime, target engine.Container, names ...string) (string, error) {
+	for _, name := range names {
+		if _, err := rt.Exec(ctx, target, []string{"sh", "-c", "command -v " + shellQuote(name)}); err == nil {
+			return name, nil
+		}
+	}
+	return "", fmt.Errorf("required command %q not found in restore image", strings.Join(names, " or "))
 }
 
 func shellQuote(s string) string {
