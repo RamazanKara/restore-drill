@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/RamazanKara/restore-drill/pkg/engine"
@@ -87,5 +88,44 @@ func TestStageS3DownloadsLatestObjectByPrefix(t *testing.T) {
 	}
 	if got := rt.copiedFiles["latest.sql"]; got != latestBody {
 		t.Fatalf("expected staged file body %q, got %q", latestBody, got)
+	}
+}
+
+func TestStageS3EmptyPrefixReturnsActionableError(t *testing.T) {
+	t.Setenv("AWS_ACCESS_KEY_ID", "restore-drill")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "restore-drill")
+	t.Setenv("AWS_EC2_METADATA_DISABLED", "true")
+
+	const bucket = "restore-drill-backups"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/"+bucket && r.URL.Query().Get("list-type") == "2" {
+			w.Header().Set("Content-Type", "application/xml")
+			_, _ = fmt.Fprintf(w, `<?xml version="1.0" encoding="UTF-8"?>
+<ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+  <Name>%s</Name>
+  <Prefix>postgres/</Prefix>
+  <KeyCount>0</KeyCount>
+</ListBucketResult>`, bucket)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+
+	_, err := Stage(context.Background(), &fakeRuntime{}, fakeContainer{}, engine.BackupConfig{
+		Repo: engine.RepoConfig{
+			Type:     "s3",
+			Bucket:   bucket,
+			Endpoint: server.URL,
+			Prefix:   "postgres/",
+			Region:   "us-east-1",
+		},
+	})
+	if err == nil {
+		t.Fatal("expected empty prefix staging failure")
+	}
+	if !strings.Contains(err.Error(), "no objects found at s3://restore-drill-backups/postgres/") {
+		t.Fatalf("expected empty prefix error, got %v", err)
 	}
 }

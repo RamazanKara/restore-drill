@@ -81,3 +81,5 @@ restore-drill follows semantic versioning:
 - Major releases are reserved for breaking public contracts.
 
 The v1 JSON result schema is documented in [REPORTING.md](REPORTING.md).
+Support windows, stable contracts, and deprecation rules are documented in
+[SUPPORT.md](SUPPORT.md).

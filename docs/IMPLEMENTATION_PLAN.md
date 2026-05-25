@@ -75,6 +75,8 @@ checks.
 - Confirmed Pushgateway replacement behavior for repeated CronJob runs.
 - Made latest-run and history persistence atomic.
 - Added state history coverage for malformed entries.
+- Added cleanup failure surfacing and negative-path staging coverage.
+- Documented support windows, stable contracts, upgrades, and deprecations.
 
 ## Active hardening backlog
 
@@ -87,8 +89,6 @@ checks.
 - Add broader Kubernetes integration coverage for namespace overrides, target
   pod service accounts, image pull secrets, resource settings, network policy,
   and failure cleanup.
-- Add upgrade, deprecation, and support-window policy details before the next
-  major release.
 - Move GoReleaser Docker configuration to `dockers_v2` once the replacement is
   no longer experimental for the project's release needs.
 

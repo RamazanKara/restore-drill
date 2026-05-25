@@ -68,6 +68,44 @@ func TestEngineCleansUpAfterValidationFailure(t *testing.T) {
 	}
 }
 
+func TestEngineReportsProviderCleanupFailure(t *testing.T) {
+	rt := &lifecycleRuntime{}
+	provider := &lifecycleProvider{cleanupErr: errors.New("remove temp data")}
+	engine := New(rt, &captureReporter{})
+	engine.RegisterProvider(provider)
+
+	result := engine.executeDrill(context.Background(), lifecycleDrill("cleanup-fails"))
+
+	if result.Error == nil || !strings.Contains(result.Error.Error(), "cleanup provider: remove temp data") {
+		t.Fatalf("expected cleanup error in result, got %v", result.Error)
+	}
+	if got := provider.cleanupCount(); got != 1 {
+		t.Fatalf("expected provider cleanup to run once, got %d", got)
+	}
+	if got := rt.destroyCount(); got != 1 {
+		t.Fatalf("expected runtime destroy to still run once, got %d", got)
+	}
+}
+
+func TestEngineReportsRuntimeDestroyFailure(t *testing.T) {
+	rt := &lifecycleRuntime{destroyErr: errors.New("api refused delete")}
+	provider := &lifecycleProvider{}
+	engine := New(rt, &captureReporter{})
+	engine.RegisterProvider(provider)
+
+	result := engine.executeDrill(context.Background(), lifecycleDrill("destroy-fails"))
+
+	if result.Error == nil || !strings.Contains(result.Error.Error(), "destroy target: api refused delete") {
+		t.Fatalf("expected destroy error in result, got %v", result.Error)
+	}
+	if got := provider.cleanupCount(); got != 1 {
+		t.Fatalf("expected provider cleanup to run once, got %d", got)
+	}
+	if got := rt.destroyCount(); got != 1 {
+		t.Fatalf("expected runtime destroy to run once, got %d", got)
+	}
+}
+
 func TestEnginePreservesProviderCheckErrors(t *testing.T) {
 	rt := &lifecycleRuntime{}
 	provider := &lifecycleProvider{checkErr: errors.New("query failed")}
@@ -188,10 +226,11 @@ func (r *captureReporter) Report(_ context.Context, results []DrillResult) error
 }
 
 type lifecycleRuntime struct {
-	mu        sync.Mutex
-	nextID    int
-	destroyed []string
-	specs     []ContainerSpec
+	mu         sync.Mutex
+	nextID     int
+	destroyed  []string
+	specs      []ContainerSpec
+	destroyErr error
 }
 
 func (r *lifecycleRuntime) Create(_ context.Context, spec ContainerSpec) (Container, error) {
@@ -224,7 +263,7 @@ func (r *lifecycleRuntime) Destroy(_ context.Context, c Container) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.destroyed = append(r.destroyed, c.ID())
-	return nil
+	return r.destroyErr
 }
 
 func (r *lifecycleRuntime) Logs(context.Context, Container) (io.ReadCloser, error) {
@@ -275,6 +314,7 @@ type lifecycleProvider struct {
 	restoreErr    error
 	validateErr   error
 	checkErr      error
+	cleanupErr    error
 	restoreDelays map[string]time.Duration
 	cleanupCalls  int
 }
@@ -327,7 +367,7 @@ func (p *lifecycleProvider) Cleanup(context.Context, Container) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.cleanupCalls++
-	return nil
+	return p.cleanupErr
 }
 
 func (p *lifecycleProvider) cleanupCount() int {

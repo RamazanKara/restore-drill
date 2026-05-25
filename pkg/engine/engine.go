@@ -3,6 +3,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sort"
@@ -105,8 +106,8 @@ func (e *Engine) RunParallel(ctx context.Context, drills []DrillConfig) ([]Drill
 	return results, nil
 }
 
-func (e *Engine) executeDrill(ctx context.Context, drill DrillConfig) DrillResult {
-	result := DrillResult{
+func (e *Engine) executeDrill(ctx context.Context, drill DrillConfig) (result DrillResult) {
+	result = DrillResult{
 		Name:      drill.Name,
 		Provider:  drill.Provider,
 		StartedAt: time.Now(),
@@ -175,10 +176,12 @@ func (e *Engine) executeDrill(ctx context.Context, drill DrillConfig) DrillResul
 		}
 		if cleanupErr := provider.Cleanup(ctx, container); cleanupErr != nil {
 			slog.Error("provider cleanup failed", "id", container.ID(), "error", cleanupErr)
+			result.Error = joinResultError(result.Error, "cleanup provider", cleanupErr)
 		}
 		slog.Info("destroying container", "id", container.ID())
 		if err := e.runtime.Destroy(ctx, container); err != nil {
 			slog.Error("failed to destroy container", "id", container.ID(), "error", err)
+			result.Error = joinResultError(result.Error, "destroy target", err)
 		}
 	}()
 
@@ -307,6 +310,14 @@ func parseMemory(s string) int64 {
 		return 0
 	}
 	return n * multiplier
+}
+
+func joinResultError(current error, prefix string, err error) error {
+	wrapped := fmt.Errorf("%s: %w", prefix, err)
+	if current == nil {
+		return wrapped
+	}
+	return errors.Join(current, wrapped)
 }
 
 // parseCPU converts Kubernetes-style CPU values to Docker NanoCPUs.

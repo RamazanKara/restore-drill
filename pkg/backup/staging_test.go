@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -26,6 +27,8 @@ type fakeRuntime struct {
 	copiedFiles  map[string]string
 	execCommands [][]string
 	execOutput   []byte
+	execErr      error
+	copyErr      error
 }
 
 func (f *fakeRuntime) Create(ctx context.Context, spec engine.ContainerSpec) (engine.Container, error) {
@@ -34,10 +37,16 @@ func (f *fakeRuntime) Create(ctx context.Context, spec engine.ContainerSpec) (en
 
 func (f *fakeRuntime) Exec(ctx context.Context, c engine.Container, cmd []string) ([]byte, error) {
 	f.execCommands = append(f.execCommands, append([]string(nil), cmd...))
+	if f.execErr != nil {
+		return nil, f.execErr
+	}
 	return f.execOutput, nil
 }
 
 func (f *fakeRuntime) CopyTo(ctx context.Context, c engine.Container, dest string, src io.Reader) error {
+	if f.copyErr != nil {
+		return f.copyErr
+	}
 	var buf bytes.Buffer
 	if _, err := io.Copy(&buf, src); err != nil {
 		return err
@@ -91,6 +100,29 @@ func TestStageLocalFile(t *testing.T) {
 	}
 	if len(rt.copiedNames) != 1 || rt.copiedNames[0] != "dump.sql" {
 		t.Fatalf("unexpected copied tar entries: %#v", rt.copiedNames)
+	}
+}
+
+func TestStageLocalCopyFailureIncludesTargetDiagnostics(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "dump.sql")
+	if err := os.WriteFile(path, []byte("select 1;"), 0o600); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+
+	rt := &fakeRuntime{
+		copyErr:    errors.New("permission denied"),
+		execOutput: []byte("uid=65534(nobody) gid=65534(nobody)"),
+	}
+	_, err := Stage(context.Background(), rt, fakeContainer{}, engine.BackupConfig{Source: path})
+	if err == nil {
+		t.Fatal("expected staging copy failure")
+	}
+	if !strings.Contains(err.Error(), "copy backup source into target: permission denied") {
+		t.Fatalf("expected copy error context, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "target staging diagnostics: uid=65534") {
+		t.Fatalf("expected target diagnostics, got %v", err)
 	}
 }
 

@@ -143,6 +143,7 @@ ConfigMap-backed drill configuration with Secret-driven environment variables.
 - [docs/PRODUCTION.md](docs/PRODUCTION.md): production rollout checklist
 - [docs/ci-integration.md](docs/ci-integration.md): CI/CD and scheduled drill examples
 - [docs/RELEASE.md](docs/RELEASE.md): release process
+- [docs/SUPPORT.md](docs/SUPPORT.md): support, upgrade, and deprecation policy
 
 ## Development
 

@@ -23,6 +23,8 @@ release work.
   reporting, and security model.
 - [Release process](RELEASE.md): local release gates, snapshot validation, tags,
   artifacts, and release hygiene.
+- [Support and upgrades](SUPPORT.md): supported versions, stable contracts,
+  deprecations, and upgrade checks.
 - [Release readiness and roadmap](IMPLEMENTATION_PLAN.md): current v1 scope,
   non-goals, hardening backlog, and future candidates.
 

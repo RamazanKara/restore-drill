@@ -65,24 +65,33 @@ func (r *Stdout) Report(_ context.Context, results []engine.DrillResult) error {
 
 	// Print detailed check results
 	for _, res := range results {
-		if len(res.Checks) == 0 {
+		if len(res.Checks) == 0 && res.Error == nil && !res.CleanupSkipped {
 			continue
 		}
-		if _, err := fmt.Fprintf(r.Writer, "  %s checks:\n", res.Name); err != nil {
+		if len(res.Checks) > 0 {
+			if _, err := fmt.Fprintf(r.Writer, "  %s checks:\n", res.Name); err != nil {
+				return err
+			}
+			for _, c := range res.Checks {
+				icon := "OK"
+				if !c.Passed {
+					icon = "FAIL"
+				}
+				detail := ""
+				if c.Error != nil {
+					detail = fmt.Sprintf(" (%s)", c.Error)
+				} else if !c.Passed {
+					detail = fmt.Sprintf(" (got: %s, want: %s)", c.Actual, c.Expected)
+				}
+				if _, err := fmt.Fprintf(r.Writer, "    %s %s [%s]%s\n", icon, c.Name, c.Duration.Truncate(1e6).String(), detail); err != nil {
+					return err
+				}
+			}
+		} else if _, err := fmt.Fprintf(r.Writer, "  %s:\n", res.Name); err != nil {
 			return err
 		}
-		for _, c := range res.Checks {
-			icon := "OK"
-			if !c.Passed {
-				icon = "FAIL"
-			}
-			detail := ""
-			if c.Error != nil {
-				detail = fmt.Sprintf(" (%s)", c.Error)
-			} else if !c.Passed {
-				detail = fmt.Sprintf(" (got: %s, want: %s)", c.Actual, c.Expected)
-			}
-			if _, err := fmt.Fprintf(r.Writer, "    %s %s [%s]%s\n", icon, c.Name, c.Duration.Truncate(1e6).String(), detail); err != nil {
+		if res.Error != nil {
+			if _, err := fmt.Fprintf(r.Writer, "    error: %s\n", res.Error); err != nil {
 				return err
 			}
 		}
