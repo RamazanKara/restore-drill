@@ -1,0 +1,34 @@
+# Local demo: verify a Redis AOF backup in a disposable Docker container.
+# Run from the repository root with:
+#   restore-drill run --config examples/demo-redis-aof.yaml --runtime docker
+
+drills:
+  - name: demo-redis-aof
+    provider: redis
+    backup:
+      tool: aof
+      source: examples/fixtures/redis/appendonly.aof
+    restore:
+      timeout: 1m
+      container:
+        image: redis:7-alpine
+    checks:
+      - name: restored-key-count
+        type: key_count
+        expect: "== 2"
+      - name: health-key-exists
+        type: key_sample
+        keys: ["session:health-check"]
+        expect: "true"
+      - name: health-key-value
+        type: query
+        sql: "GET session:health-check"
+        expect: "ok"
+      - name: redis-ping
+        type: query
+        sql: "PING"
+        expect: 'contains "PONG"'
+
+reporting:
+  format: [table]
+  output: ""

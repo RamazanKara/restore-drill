@@ -12,6 +12,13 @@ results for audits and alerts.
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/RamazanKara/restore-drill)](https://github.com/RamazanKara/restore-drill/releases)
 
+## Demo
+
+![restore-drill Redis restore demo](docs/assets/restore-drill-demo.gif)
+
+The recording runs the local Redis AOF demo in Docker and is generated from
+[docs/assets/restore-drill-demo.tape](docs/assets/restore-drill-demo.tape).
+
 ## What it does
 
 1. Creates an isolated restore target with Docker or Kubernetes.
@@ -59,6 +66,9 @@ docker pull ghcr.io/ramazankara/restore-drill:latest
 ## Quick start
 
 ```bash
+make build
+./bin/restore-drill run --config examples/demo-redis-aof.yaml --runtime docker
+
 restore-drill validate --config examples/drill.yaml
 restore-drill run --config drill.yaml --runtime docker
 restore-drill run --config drill.yaml --runtime docker --parallel --format json
