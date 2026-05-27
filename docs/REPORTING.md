@@ -7,6 +7,17 @@ restore-drill writes operational evidence in four places:
 - optional configured JSON/HTML report files
 - optional webhooks and Prometheus Pushgateway metrics
 
+Use the outputs together rather than treating one format as the source of
+truth:
+
+| Need | Best output |
+| --- | --- |
+| Human operator watching a manual drill | stdout table |
+| CI gate or audit pipeline | run JSON |
+| Periodic review by humans | HTML compliance report |
+| Paging or chat notification | webhook |
+| SLO/RPO alerting | Pushgateway metrics |
+
 ## Configured report files
 
 The `reporting` block controls files written after `restore-drill run` completes:
@@ -18,7 +29,9 @@ reporting:
   retention: 90d
 ```
 
-`output` is treated as a directory when it already exists as a directory, ends with `/`, has no file extension, or more than one file format is enabled. Generated file names include the run timestamp:
+`output` is treated as a directory when it already exists as a directory, ends
+with `/`, has no file extension, or more than one file format is enabled.
+Generated file names include the run timestamp:
 
 - `restore-drill-run-20260524T120000Z.json`
 - `restore-drill-compliance-20260524T120000Z.html`
@@ -27,15 +40,19 @@ When a single format is enabled and `output` has a file extension, restore-drill
 
 `format` accepts:
 
-- `json`: the per-run drill result array, using the same shape as `restore-drill run --format json`
-- `html`: a compliance report generated from local history for the configured retention window
+- `json`: the per-run drill result array, using the same shape as
+  `restore-drill run --format json`
+- `html`: a compliance report generated from local history for the configured
+  retention window
 - `table`: accepted for stdout compatibility; it does not create a file
 
-`retention` defaults to `90d`. It accepts day counts like `30d` and Go durations like `720h`.
+`retention` defaults to `90d`. It accepts day counts like `30d` and Go
+durations like `720h`.
 
 ## JSON compatibility
 
-The run JSON report is a top-level array of drill result objects. The v1 schema is intentionally stable for automation and audit pipelines.
+The run JSON report is a top-level array of drill result objects. The v1 schema
+is intentionally stable for automation and audit pipelines.
 
 Fields currently emitted per drill:
 
@@ -86,21 +103,27 @@ restore-drill report --format json --last 30
 
 ## Webhooks
 
-Webhook alerts are configured per drill. Header values support the same environment interpolation as the rest of the config, so secrets can come from the process environment instead of being committed to YAML:
+Webhook alerts are configured per drill. Header values support the same
+environment interpolation as the rest of the config, so secrets can come from
+the process environment instead of being committed to YAML:
 
 ```yaml
 alerts:
   - type: webhook
-    url: https://hooks.example.invalid/restore-drill
+    url: ${RESTORE_DRILL_WEBHOOK_URL}
     headers:
       Authorization: "Bearer ${RESTORE_DRILL_WEBHOOK_TOKEN}"
 ```
 
-The webhook body is a JSON object with `timestamp`, `summary`, and `results`. `results` uses the same drill result shape as the run JSON report. restore-drill retries transport errors and HTTP 5xx responses, but it does not retry HTTP 4xx responses.
+The webhook body is a JSON object with `timestamp`, `summary`, and `results`.
+`results` uses the same drill result shape as the run JSON report.
+restore-drill retries transport errors and HTTP 5xx responses, but it does not
+retry HTTP 4xx responses.
 
 ## Prometheus
 
-restore-drill is usually a short-lived job or CronJob, so it pushes metrics to Prometheus Pushgateway instead of exposing a long-lived `/metrics` endpoint:
+restore-drill is usually a short-lived job or CronJob, so it pushes metrics to
+Prometheus Pushgateway instead of exposing a long-lived `/metrics` endpoint:
 
 ```yaml
 metrics:
@@ -112,7 +135,9 @@ metrics:
       team: platform
 ```
 
-Scrape the Pushgateway with your existing Prometheus setup. With Prometheus Operator, attach a `ServiceMonitor` to the Pushgateway service, not to restore-drill CronJob pods.
+Scrape the Pushgateway with your existing Prometheus setup. With Prometheus
+Operator, attach a `ServiceMonitor` to the Pushgateway service, not to
+restore-drill CronJob pods.
 
 Example alert expressions:
 
@@ -128,4 +153,6 @@ time() - restore_drill_last_success_timestamp > 93600
 restore_drill_backup_age_seconds > 86400
 ```
 
-The Pushgateway write replaces the current restore-drill grouping on every run, so repeated CronJob executions publish current-run values instead of accumulating stale counters.
+The Pushgateway write replaces the current restore-drill grouping on every run,
+so repeated CronJob executions publish current-run values instead of
+accumulating stale counters.

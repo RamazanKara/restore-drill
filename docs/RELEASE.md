@@ -4,6 +4,9 @@ restore-drill releases are tag driven. The canonical module is
 `github.com/RamazanKara/restore-drill`, and container images are published to
 `ghcr.io/ramazankara/restore-drill`.
 
+This page is for maintainers cutting a release. Users looking for installation
+options should start with the root [README](../README.md#install).
+
 ## Release toolchain
 
 Install these tools before running the full local release gate:
@@ -44,7 +47,7 @@ stable Docker path until the replacement is production-ready.
 ## Tagging
 
 ```bash
-git tag vX.Y.Z
+git tag -a vX.Y.Z -m "restore-drill vX.Y.Z"
 git push origin vX.Y.Z
 ```
 

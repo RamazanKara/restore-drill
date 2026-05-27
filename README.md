@@ -12,11 +12,11 @@ results for audits and alerts.
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/RamazanKara/restore-drill)](https://github.com/RamazanKara/restore-drill/releases)
 
-## Demo
+## See It Run
 
 ![restore-drill Redis restore demo](docs/assets/restore-drill-demo.gif)
 
-The recording runs the local Redis AOF demo in Docker and is generated from
+The recording runs a real Redis AOF restore in Docker and is generated from
 [docs/assets/restore-drill-demo.tape](docs/assets/restore-drill-demo.tape).
 
 ## What it does
@@ -47,9 +47,8 @@ Provider restore images must include the database runtime, client tools, and the
 selected backup tool. Preflight checks fail early when required commands are
 missing.
 
-Roadmap candidates are tracked in
-[docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md). Cost estimation is a
-non-goal.
+Future candidates are tracked in [docs/ROADMAP.md](docs/ROADMAP.md). Cost
+estimation is a non-goal.
 
 ## Install
 
@@ -65,10 +64,16 @@ docker pull ghcr.io/ramazankara/restore-drill:latest
 
 ## Quick start
 
+Run the self-contained Redis demo from a clone:
+
 ```bash
 make build
 ./bin/restore-drill run --config examples/demo-redis-aof.yaml --runtime docker
+```
 
+Then validate and run your own drill config:
+
+```bash
 restore-drill validate --config examples/drill.yaml
 restore-drill run --config drill.yaml --runtime docker
 restore-drill run --config drill.yaml --runtime docker --parallel --format json
@@ -113,7 +118,7 @@ drills:
         expect: "> 0"
     alerts:
       - type: webhook
-        url: https://hooks.example.invalid/restore-drill
+        url: ${RESTORE_DRILL_WEBHOOK_URL}
         headers:
           Authorization: "Bearer ${RESTORE_DRILL_WEBHOOK_TOKEN}"
 
@@ -152,8 +157,10 @@ ConfigMap-backed drill configuration with Secret-driven environment variables.
 - [docs/REPORTING.md](docs/REPORTING.md): JSON, HTML, webhook, and metrics contracts
 - [docs/PRODUCTION.md](docs/PRODUCTION.md): production rollout checklist
 - [docs/ci-integration.md](docs/ci-integration.md): CI/CD and scheduled drill examples
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): engine, runtime, provider, and state model
 - [docs/RELEASE.md](docs/RELEASE.md): release process
 - [docs/SUPPORT.md](docs/SUPPORT.md): support, upgrade, and deprecation policy
+- [docs/ROADMAP.md](docs/ROADMAP.md): stable scope, non-goals, and roadmap candidates
 
 ## Development
 

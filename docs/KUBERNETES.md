@@ -4,6 +4,11 @@ The Helm chart deploys restore-drill as a CronJob. The CronJob runs
 `restore-drill run --runtime=kubernetes`, and each drill creates a short-lived
 restore target pod.
 
+Use the chart when restore verification should run on a cluster schedule and
+the restore target needs access to in-cluster secrets, service accounts, network
+policy, or object-storage identity. Use the Docker runtime locally or in CI when
+you only need a quick restore proof outside the cluster.
+
 ## Install
 
 Use inline config for simple deployments:
@@ -39,6 +44,9 @@ Helm rendering fails fast when neither `config.inline` nor
   ID in state and JSON output.
 
 ## Values that matter most
+
+Start with these values before tuning the rest of
+[values.yaml](../deploy/helm/restore-drill/values.yaml):
 
 ```yaml
 schedule: "0 3 * * *"
@@ -104,6 +112,9 @@ env:
 Use `extraVolumes` and `extraVolumeMounts` for mounted backup files,
 certificates, or provider credentials.
 
+Do not put backup credentials directly in `config.inline`; rendered Helm output
+is often stored in CI logs, GitOps diffs, or release history.
+
 ## Restore target images
 
 The restore target image comes from each drill's `restore.container.image`, not
@@ -141,7 +152,8 @@ results to the configured Prometheus Pushgateway.
 
 With Prometheus Operator, attach a `ServiceMonitor` to the Pushgateway service,
 not to restore-drill CronJob pods. A CronJob does not provide a stable
-restore-drill endpoint to scrape.
+restore-drill endpoint to scrape, so a direct restore-drill `ServiceMonitor`
+would be noisy at best and usually empty.
 
 Prometheus alert examples are documented in [REPORTING.md](REPORTING.md).
 

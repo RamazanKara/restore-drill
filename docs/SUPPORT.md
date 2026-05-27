@@ -1,6 +1,9 @@
 # Support, Upgrades, and Deprecation Policy
 
 restore-drill follows semantic versioning and keeps v1 public contracts stable.
+The goal is that scheduled restore drills keep running across patch and minor
+updates unless a change is clearly documented here, in `CHANGELOG.md`, and in
+the release notes.
 
 ## Supported versions
 

@@ -3,6 +3,16 @@
 Use this checklist before relying on restore-drill for audit evidence,
 disaster-recovery readiness, or scheduled operational alerts.
 
+## Rollout Path
+
+1. Run the local Redis demo to confirm the CLI and runtime work on your machine.
+2. Create one drill against a non-production backup and the exact restore image
+   you expect to schedule.
+3. Add JSON/HTML reporting and verify the artifacts are stored durably.
+4. Add Pushgateway metrics and alert on failed validation plus stale success.
+5. Move the same config into CI or Helm, then keep the first few runs under
+   manual review.
+
 ## Deployment
 
 - Run restore-drill in a dedicated namespace or isolated CI runner.

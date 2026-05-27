@@ -4,6 +4,10 @@ Run `restore-drill` on a schedule or after deployments to continuously prove
 backup recovery works. A non-zero exit code means one or more drills failed and
 can gate a pipeline.
 
+Use Docker runtime jobs for portable CI restore proofs. Use the Kubernetes
+runtime when the drill must run inside the cluster with namespace-scoped RBAC,
+Secrets, service accounts, and NetworkPolicy.
+
 ## GitHub Actions
 
 Docker is available on `ubuntu-latest`, so the simplest workflow uses the Docker
@@ -21,11 +25,12 @@ jobs:
   restore-drill:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
-          go-version: "1.25.x"
+          go-version-file: go.mod
+          cache: true
 
       - name: Install restore-drill
         run: go install github.com/RamazanKara/restore-drill/cmd/restore-drill@latest

@@ -1,6 +1,8 @@
 # Contributing to restore-drill
 
-Thanks for helping improve restore-drill. This project is intended to be boring, auditable infrastructure software: small changes, clear tests, and honest documentation beat clever surprises.
+Thanks for helping improve restore-drill. This project is intended to be boring,
+auditable infrastructure software: small changes, clear tests, and honest
+documentation beat clever surprises.
 
 ## Development
 
@@ -19,10 +21,14 @@ integration gate when Docker or kind is available.
 ## Pull requests
 
 - Keep changes focused on one behavior or documentation area.
-- Add or update tests for provider, runtime, config, metrics, or reporter changes.
-- Update examples and docs when changing public YAML, CLI flags, metrics, or release behavior.
-- Do not commit generated release artifacts, local binaries, credentials, or real backup data.
-- Keep roadmap candidates clearly separate from GA behavior in README and docs.
+- Add or update tests for provider, runtime, config, metrics, or reporter
+  changes.
+- Update examples and docs when changing public YAML, CLI flags, metrics, or
+  release behavior.
+- Do not commit generated release artifacts, local binaries, credentials, or
+  real backup data.
+- Keep roadmap candidates clearly separate from GA behavior in README,
+  [docs/ROADMAP.md](docs/ROADMAP.md), and release notes.
 
 ## Integration tests
 
@@ -32,7 +38,8 @@ Docker-backed integration tests are opt-in because they create containers:
 make test-integration
 ```
 
-Provider changes should include either unit coverage with a fake runtime or an integration fixture that exercises the documented restore path.
+Provider changes should include either unit coverage with a fake runtime or an
+integration fixture that exercises the documented restore path.
 
 ## Documentation
 

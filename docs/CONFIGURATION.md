@@ -3,6 +3,20 @@
 `restore-drill` reads YAML from `--config`. Environment interpolation happens
 before YAML parsing and supports `${VAR}` plus `${VAR:-default}`.
 
+If you want a runnable config before reading the whole reference, start with
+[examples/demo-redis-aof.yaml](../examples/demo-redis-aof.yaml). It restores a
+small Redis AOF fixture in Docker and exercises the same config shape used for
+larger production drills.
+
+## Mental model
+
+A drill answers four questions:
+
+1. Which provider and backup tool should restore the artifact?
+2. Where is the backup artifact or repository?
+3. What disposable image should receive the restore?
+4. Which checks prove the restored data is usable?
+
 ## Top level
 
 ```yaml
@@ -150,7 +164,7 @@ Supported expectations:
 ```yaml
 alerts:
   - type: webhook
-    url: https://hooks.example.invalid/restore-drill
+    url: ${RESTORE_DRILL_WEBHOOK_URL}
     headers:
       Authorization: "Bearer ${RESTORE_DRILL_WEBHOOK_TOKEN}"
   - type: prometheus
@@ -163,6 +177,9 @@ run JSON output. `url` and `endpoint` are both accepted for webhooks; prefer
 
 Webhook `headers` are copied to the request and support environment
 interpolation. Keep tokens in the runtime environment, not in committed config.
+Use a required variable such as `${RESTORE_DRILL_WEBHOOK_URL}` when a missing
+destination should fail config validation. Omit the webhook alert in
+environments that should not send webhooks.
 
 Prometheus Pushgateway is configured globally under `metrics.prometheus`.
 Per-drill `prometheus` alert entries are accepted for documentation compatibility.

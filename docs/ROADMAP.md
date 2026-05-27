@@ -1,10 +1,14 @@
-# Release Readiness and Roadmap
+# Roadmap and Release Readiness
 
 restore-drill is stable when it is excellent at one job: proving that real
 backups can be restored into disposable environments and validated with useful
 evidence.
 
-## Product focus
+This page is deliberately narrow. It explains what is stable today, what must
+stay true for releases, and which ideas are future candidates rather than
+current product promises.
+
+## Product Focus
 
 restore-drill verifies restores:
 
@@ -15,7 +19,7 @@ restore-drill verifies restores:
 - report RTO/RPO, validation evidence, retained-target details, and history
 - publish metrics and webhook notifications for operational follow-up
 
-Non-goals:
+It intentionally does not:
 
 - backup scheduling or orchestration
 - backup repository management
@@ -24,7 +28,7 @@ Non-goals:
 - general-purpose database migration
 - broad provider sprawl before existing providers are boringly reliable
 
-## Current stable scope
+## Stable v1 Scope
 
 - Canonical module: `github.com/RamazanKara/restore-drill`
 - License: Apache-2.0
@@ -34,7 +38,10 @@ Non-goals:
 - Supported outputs: stdout table, run JSON, HTML compliance report, webhook,
   local history, Prometheus Pushgateway
 
-## Release gates
+The public contracts that must remain compatible within v1 are documented in
+[SUPPORT.md](SUPPORT.md) and [REPORTING.md](REPORTING.md).
+
+## Release Gates
 
 Every release should pass:
 
@@ -54,7 +61,7 @@ The release is not ready if README-supported provider, runtime, example, Helm,
 reporting, or release artifact behavior is not proven by CI or local release
 checks.
 
-## Completed hardening
+## Already Hardened
 
 - Standardized project identity on `github.com/RamazanKara/restore-drill` and
   `ghcr.io/ramazankara/restore-drill`.
@@ -78,21 +85,21 @@ checks.
 - Added cleanup failure surfacing and negative-path staging coverage.
 - Documented support windows, stable contracts, upgrades, and deprecations.
 
-## Active hardening backlog
+## Maintenance Priorities
 
-- Keep Docker integration coverage green for generated logical fixtures and
-  physical/PITR flows.
+- Keep Docker integration coverage green for generated logical fixtures,
+  physical restore flows, and PITR-capable providers.
 - Keep archive staging coverage green for `.tar`, `.tar.gz`, `.tgz`,
   `.xbstream`, and `.xbstream.gz`.
-- Extend negative-path tests for missing credentials, staging failures, provider
-  restore failures, and cleanup failures.
-- Add broader Kubernetes integration coverage for namespace overrides, target
-  pod service accounts, image pull secrets, resource settings, network policy,
-  and failure cleanup.
-- Move GoReleaser Docker configuration to `dockers_v2` once the replacement is
+- Keep adding negative-path coverage for missing credentials, staging failures,
+  provider restore failures, cleanup failures, and retained-target handling.
+- Broaden Kubernetes integration coverage for namespace overrides, target pod
+  service accounts, image pull secrets, resource settings, NetworkPolicy, and
+  failure cleanup.
+- Move GoReleaser Docker configuration to `dockers_v2` when the replacement is
   no longer experimental for the project's release needs.
 
-## Roadmap candidates
+## Future Candidates
 
 These are future candidates, not current GA claims:
 

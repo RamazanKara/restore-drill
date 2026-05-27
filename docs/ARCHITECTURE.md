@@ -35,6 +35,11 @@ For each drill, the engine:
 Sequential execution is the default. `--parallel` runs independent drills
 concurrently while preserving result slots for reporting.
 
+The important boundary is that the engine owns orchestration and evidence, while
+providers own database-specific restore and validation behavior. Runtime adapters
+only know how to create, execute in, copy to, log, and destroy disposable
+targets.
+
 ## Engine interfaces
 
 Providers implement tool-specific restore and validation:
