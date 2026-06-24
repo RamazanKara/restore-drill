@@ -287,16 +287,6 @@ func (r *Runtime) Destroy(ctx context.Context, c engine.Container) error {
 	return nil
 }
 
-// Logs returns the pod's log stream.
-func (r *Runtime) Logs(ctx context.Context, c engine.Container) (io.ReadCloser, error) {
-	p := c.(*pod)
-	req := r.client.CoreV1().Pods(p.namespace).GetLogs(p.name, &corev1.PodLogOptions{
-		Container: "db",
-		Follow:    false,
-	})
-	return req.Stream(ctx)
-}
-
 // waitPodReady polls until the pod is in Running phase.
 func (r *Runtime) waitPodReady(ctx context.Context, name string) error {
 	return wait.PollUntilContextTimeout(ctx, 2*time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {

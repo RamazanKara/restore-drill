@@ -266,10 +266,6 @@ func (r *lifecycleRuntime) Destroy(_ context.Context, c Container) error {
 	return r.destroyErr
 }
 
-func (r *lifecycleRuntime) Logs(context.Context, Container) (io.ReadCloser, error) {
-	return io.NopCloser(strings.NewReader("")), nil
-}
-
 func (r *lifecycleRuntime) destroyCount() int {
 	r.mu.Lock()
 	defer r.mu.Unlock()

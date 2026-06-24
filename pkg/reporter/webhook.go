@@ -57,7 +57,6 @@ func (w *Webhook) Report(ctx context.Context, results []engine.DrillResult) erro
 	failed := 0
 	var totalDuration time.Duration
 
-	jsonResults := make([]jsonResult, 0, len(results))
 	for _, r := range results {
 		if r.Error == nil && r.ValidationPassed {
 			passed++
@@ -65,45 +64,6 @@ func (w *Webhook) Report(ctx context.Context, results []engine.DrillResult) erro
 			failed++
 		}
 		totalDuration += r.Duration
-
-		jr := jsonResult{
-			Name:             r.Name,
-			Provider:         r.Provider,
-			Status:           "pass",
-			StartedAt:        r.StartedAt,
-			Duration:         r.Duration.String(),
-			DurationMs:       r.Duration.Milliseconds(),
-			ValidationPassed: r.ValidationPassed,
-			CleanupSkipped:   r.CleanupSkipped,
-			TargetID:         r.TargetID,
-			TargetHost:       r.TargetHost,
-			TargetPorts:      r.TargetPorts,
-		}
-		if r.Error != nil || !r.ValidationPassed {
-			jr.Status = "fail"
-		}
-		if r.Error != nil {
-			jr.Error = r.Error.Error()
-		}
-		if !r.BackupTimestamp.IsZero() {
-			jr.BackupTimestamp = r.BackupTimestamp.Format(time.RFC3339)
-			jr.BackupAge = r.BackupAge.Truncate(time.Second).String()
-		}
-		for _, c := range r.Checks {
-			jc := jsonCheck{
-				Name:     c.Name,
-				Type:     c.Type,
-				Expected: c.Expected,
-				Actual:   c.Actual,
-				Passed:   c.Passed,
-				Duration: c.Duration.String(),
-			}
-			if c.Error != nil {
-				jc.Error = c.Error.Error()
-			}
-			jr.Checks = append(jr.Checks, jc)
-		}
-		jsonResults = append(jsonResults, jr)
 	}
 
 	status := "pass"
@@ -120,7 +80,7 @@ func (w *Webhook) Report(ctx context.Context, results []engine.DrillResult) erro
 			Status:   status,
 			Duration: totalDuration.String(),
 		},
-		Results: jsonResults,
+		Results: jsonResultsFromDrillResults(results),
 	}
 
 	body, err := json.Marshal(payload)

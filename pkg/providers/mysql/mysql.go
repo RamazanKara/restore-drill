@@ -10,6 +10,7 @@ import (
 
 	"github.com/RamazanKara/restore-drill/pkg/backup"
 	"github.com/RamazanKara/restore-drill/pkg/engine"
+	"github.com/RamazanKara/restore-drill/pkg/providers/internal/targetcmd"
 )
 
 // Provider implements engine.Provider for MySQL/MariaDB.
@@ -24,34 +25,34 @@ func (p *Provider) Name() string {
 }
 
 func (p *Provider) Preflight(ctx context.Context, rt engine.Runtime, cfg engine.BackupConfig, target engine.Container, checks []engine.Check) error {
-	if err := commandExistsAny(ctx, rt, target, "mysql client", "mysql", "mariadb"); err != nil {
+	if err := targetcmd.CommandExistsAny(ctx, rt, target, "mysql client", "mysql", "mariadb"); err != nil {
 		return err
 	}
-	if err := commandExistsAny(ctx, rt, target, "mysql admin client", "mysqladmin", "mariadb-admin"); err != nil {
+	if err := targetcmd.CommandExistsAny(ctx, rt, target, "mysql admin client", "mysqladmin", "mariadb-admin"); err != nil {
 		return err
 	}
 
 	required := make([]string, 0)
 	switch cfg.Tool {
 	case "mysqldump":
-		if strings.HasSuffix(configuredBackupPath(cfg), ".gz") {
+		if strings.HasSuffix(targetcmd.ConfiguredBackupPath(cfg), ".gz") {
 			required = append(required, "gzip")
 		}
 	case "xtrabackup":
 		required = append(required, "xtrabackup")
-		if err := commandExistsAny(ctx, rt, target, "mysql safe launcher", "mysqld_safe", "mariadbd-safe"); err != nil {
+		if err := targetcmd.CommandExistsAny(ctx, rt, target, "mysql safe launcher", "mysqld_safe", "mariadbd-safe"); err != nil {
 			return err
 		}
-		required = append(required, backup.ArchiveRequirements(configuredBackupPath(cfg))...)
+		required = append(required, backup.ArchiveRequirements(targetcmd.ConfiguredBackupPath(cfg))...)
 	case "mariabackup":
 		required = append(required, "mariabackup")
-		if err := commandExistsAny(ctx, rt, target, "mysql safe launcher", "mysqld_safe", "mariadbd-safe"); err != nil {
+		if err := targetcmd.CommandExistsAny(ctx, rt, target, "mysql safe launcher", "mysqld_safe", "mariadbd-safe"); err != nil {
 			return err
 		}
-		required = append(required, backup.ArchiveRequirements(configuredBackupPath(cfg))...)
+		required = append(required, backup.ArchiveRequirements(targetcmd.ConfiguredBackupPath(cfg))...)
 	}
 	for _, cmd := range required {
-		if err := commandExists(ctx, rt, target, cmd); err != nil {
+		if err := targetcmd.CommandExists(ctx, rt, target, cmd); err != nil {
 			return err
 		}
 	}
@@ -59,15 +60,13 @@ func (p *Provider) Preflight(ctx context.Context, rt engine.Runtime, cfg engine.
 }
 
 func (p *Provider) Restore(ctx context.Context, rt engine.Runtime, cfg engine.BackupConfig, target engine.Container) (*engine.RestoreResult, error) {
-	start := time.Now()
-
 	switch cfg.Tool {
 	case "mysqldump":
-		return p.restoreMysqldump(ctx, rt, cfg, target, start)
+		return p.restoreMysqldump(ctx, rt, cfg, target)
 	case "xtrabackup":
-		return p.restoreXtrabackup(ctx, rt, cfg, target, start)
+		return p.restoreXtrabackup(ctx, rt, cfg, target)
 	case "mariabackup":
-		return p.restoreMariabackup(ctx, rt, cfg, target, start)
+		return p.restoreMariabackup(ctx, rt, cfg, target)
 	default:
 		return nil, fmt.Errorf("mysql: unsupported backup tool %q", cfg.Tool)
 	}
@@ -112,7 +111,7 @@ func (p *Provider) Cleanup(ctx context.Context, target engine.Container) error {
 }
 
 func (p *Provider) execSQL(ctx context.Context, rt engine.Runtime, target engine.Container, sql string) (string, error) {
-	client, err := firstAvailableCommand(ctx, rt, target, "mysql", "mariadb")
+	client, err := targetcmd.FirstAvailableCommand(ctx, rt, target, "mysql", "mariadb")
 	if err != nil {
 		return "", err
 	}
@@ -127,7 +126,7 @@ func (p *Provider) execSQL(ctx context.Context, rt engine.Runtime, target engine
 
 func (p *Provider) waitReady(ctx context.Context, rt engine.Runtime, target engine.Container) error {
 	deadline := time.Now().Add(60 * time.Second)
-	admin, err := firstAvailableCommand(ctx, rt, target, "mysqladmin", "mariadb-admin")
+	admin, err := targetcmd.FirstAvailableCommand(ctx, rt, target, "mysqladmin", "mariadb-admin")
 	if err != nil {
 		return err
 	}
@@ -153,7 +152,7 @@ func (p *Provider) waitReady(ctx context.Context, rt engine.Runtime, target engi
 	return fmt.Errorf("mysql: timeout waiting for database to accept connections")
 }
 
-func (p *Provider) restoreMysqldump(ctx context.Context, rt engine.Runtime, cfg engine.BackupConfig, target engine.Container, start time.Time) (*engine.RestoreResult, error) {
+func (p *Provider) restoreMysqldump(ctx context.Context, rt engine.Runtime, cfg engine.BackupConfig, target engine.Container) (*engine.RestoreResult, error) {
 	slog.Info("restoring via mysqldump", "source", cfg.Source)
 
 	if err := p.waitReady(ctx, rt, target); err != nil {
@@ -165,14 +164,14 @@ func (p *Provider) restoreMysqldump(ctx context.Context, rt engine.Runtime, cfg 
 		return nil, err
 	}
 
-	client, err := firstAvailableCommand(ctx, rt, target, "mysql", "mariadb")
+	client, err := targetcmd.FirstAvailableCommand(ctx, rt, target, "mysql", "mariadb")
 	if err != nil {
 		return nil, err
 	}
 
-	restoreCmd := fmt.Sprintf("%s -u root < %s", shellQuote(client), shellQuote(staged.Path))
+	restoreCmd := fmt.Sprintf("%s -u root < %s", targetcmd.ShellQuote(client), targetcmd.ShellQuote(staged.Path))
 	if strings.HasSuffix(staged.Path, ".gz") {
-		restoreCmd = fmt.Sprintf("gzip -dc %s | %s -u root", shellQuote(staged.Path), shellQuote(client))
+		restoreCmd = fmt.Sprintf("gzip -dc %s | %s -u root", targetcmd.ShellQuote(staged.Path), targetcmd.ShellQuote(client))
 	}
 
 	cmd := []string{"sh", "-c", restoreCmd}
@@ -181,12 +180,10 @@ func (p *Provider) restoreMysqldump(ctx context.Context, rt engine.Runtime, cfg 
 		return nil, fmt.Errorf("mysql restore: %w\noutput: %s", err, string(out))
 	}
 
-	return &engine.RestoreResult{
-		Duration: time.Since(start).Milliseconds(),
-	}, nil
+	return &engine.RestoreResult{}, nil
 }
 
-func (p *Provider) restoreXtrabackup(ctx context.Context, rt engine.Runtime, cfg engine.BackupConfig, target engine.Container, start time.Time) (*engine.RestoreResult, error) {
+func (p *Provider) restoreXtrabackup(ctx context.Context, rt engine.Runtime, cfg engine.BackupConfig, target engine.Container) (*engine.RestoreResult, error) {
 	slog.Info("restoring via xtrabackup", "source", cfg.Source)
 	staged, err := backup.Stage(ctx, rt, target, cfg)
 	if err != nil {
@@ -228,12 +225,10 @@ func (p *Provider) restoreXtrabackup(ctx context.Context, rt engine.Runtime, cfg
 		return nil, err
 	}
 
-	return &engine.RestoreResult{
-		Duration: time.Since(start).Milliseconds(),
-	}, nil
+	return &engine.RestoreResult{}, nil
 }
 
-func (p *Provider) restoreMariabackup(ctx context.Context, rt engine.Runtime, cfg engine.BackupConfig, target engine.Container, start time.Time) (*engine.RestoreResult, error) {
+func (p *Provider) restoreMariabackup(ctx context.Context, rt engine.Runtime, cfg engine.BackupConfig, target engine.Container) (*engine.RestoreResult, error) {
 	slog.Info("restoring via mariabackup", "source", cfg.Source)
 	staged, err := backup.Stage(ctx, rt, target, cfg)
 	if err != nil {
@@ -273,13 +268,11 @@ func (p *Provider) restoreMariabackup(ctx context.Context, rt engine.Runtime, cf
 		return nil, err
 	}
 
-	return &engine.RestoreResult{
-		Duration: time.Since(start).Milliseconds(),
-	}, nil
+	return &engine.RestoreResult{}, nil
 }
 
 func (p *Provider) stopMySQL(ctx context.Context, rt engine.Runtime, target engine.Container) error {
-	admin, err := firstAvailableCommand(ctx, rt, target, "mysqladmin", "mariadb-admin")
+	admin, err := targetcmd.FirstAvailableCommand(ctx, rt, target, "mysqladmin", "mariadb-admin")
 	if err != nil {
 		return err
 	}
@@ -313,7 +306,7 @@ func (p *Provider) waitStopped(ctx context.Context, rt engine.Runtime, target en
 }
 
 func (p *Provider) startMySQL(ctx context.Context, rt engine.Runtime, target engine.Container) error {
-	safe, err := firstAvailableCommand(ctx, rt, target, "mysqld_safe", "mariadbd-safe")
+	safe, err := targetcmd.FirstAvailableCommand(ctx, rt, target, "mysqld_safe", "mariadbd-safe")
 	if err != nil {
 		return err
 	}
@@ -321,38 +314,4 @@ func (p *Provider) startMySQL(ctx context.Context, rt engine.Runtime, target eng
 		return err
 	}
 	return nil
-}
-
-func configuredBackupPath(cfg engine.BackupConfig) string {
-	if cfg.Source != "" {
-		return cfg.Source
-	}
-	return cfg.Repo.Prefix
-}
-
-func commandExists(ctx context.Context, rt engine.Runtime, target engine.Container, name string) error {
-	if _, err := rt.Exec(ctx, target, []string{"sh", "-c", "command -v " + shellQuote(name)}); err != nil {
-		return fmt.Errorf("required command %q not found in restore image", name)
-	}
-	return nil
-}
-
-func commandExistsAny(ctx context.Context, rt engine.Runtime, target engine.Container, label string, names ...string) error {
-	if _, err := firstAvailableCommand(ctx, rt, target, names...); err == nil {
-		return nil
-	}
-	return fmt.Errorf("required %s (%s) not found in restore image", label, strings.Join(names, " or "))
-}
-
-func firstAvailableCommand(ctx context.Context, rt engine.Runtime, target engine.Container, names ...string) (string, error) {
-	for _, name := range names {
-		if _, err := rt.Exec(ctx, target, []string{"sh", "-c", "command -v " + shellQuote(name)}); err == nil {
-			return name, nil
-		}
-	}
-	return "", fmt.Errorf("required command %q not found in restore image", strings.Join(names, " or "))
-}
-
-func shellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
 }

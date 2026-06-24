@@ -167,8 +167,6 @@ alerts:
     url: ${RESTORE_DRILL_WEBHOOK_URL}
     headers:
       Authorization: "Bearer ${RESTORE_DRILL_WEBHOOK_TOKEN}"
-  - type: prometheus
-    endpoint: http://pushgateway:9091
 ```
 
 Webhook alerts send a JSON object with a summary and the same result shape as
@@ -182,7 +180,8 @@ destination should fail config validation. Omit the webhook alert in
 environments that should not send webhooks.
 
 Prometheus Pushgateway is configured globally under `metrics.prometheus`.
-Per-drill `prometheus` alert entries are accepted for documentation compatibility.
+Per-drill `prometheus` alert entries are still accepted for compatibility with
+older configs, but they are deprecated no-ops.
 
 ## Metrics
 
@@ -215,7 +214,7 @@ When `output` is set, `restore-drill run` writes configured report files after
 each run:
 
 - `json`: current run result array, using the same shape as `--format json`
-- `html`: compliance report generated from local history for the retention
+- `html`: restore evidence report generated from local history for the retention
   window
 - `table`: accepted for stdout compatibility and does not create a file
 

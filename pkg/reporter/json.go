@@ -3,7 +3,6 @@ package reporter
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"os"
 	"time"
@@ -51,66 +50,11 @@ func NewJSON(pretty bool) *JSON {
 	return &JSON{Writer: os.Stdout, Pretty: pretty}
 }
 
-// NewJSONFile creates a JSON reporter that writes to a file.
-func NewJSONFile(path string, pretty bool) (*JSON, error) {
-	f, err := os.Create(path) // #nosec G304 -- path is supplied by the caller for report output.
-	if err != nil {
-		return nil, fmt.Errorf("create json output file: %w", err)
-	}
-	return &JSON{Writer: f, Pretty: pretty}, nil
-}
-
 // Report serializes results to JSON.
 func (r *JSON) Report(_ context.Context, results []engine.DrillResult) error {
-	output := make([]jsonResult, 0, len(results))
-
-	for _, res := range results {
-		jr := jsonResult{
-			Name:             res.Name,
-			Provider:         res.Provider,
-			Status:           "pass",
-			StartedAt:        res.StartedAt,
-			Duration:         res.Duration.String(),
-			DurationMs:       res.Duration.Milliseconds(),
-			ValidationPassed: res.ValidationPassed,
-			CleanupSkipped:   res.CleanupSkipped,
-			TargetID:         res.TargetID,
-			TargetHost:       res.TargetHost,
-			TargetPorts:      res.TargetPorts,
-		}
-
-		if res.Error != nil || !res.ValidationPassed {
-			jr.Status = "fail"
-		}
-		if res.Error != nil {
-			jr.Error = res.Error.Error()
-		}
-		if !res.BackupTimestamp.IsZero() {
-			jr.BackupTimestamp = res.BackupTimestamp.Format(time.RFC3339)
-			jr.BackupAge = res.BackupAge.Truncate(time.Second).String()
-		}
-
-		for _, c := range res.Checks {
-			jc := jsonCheck{
-				Name:     c.Name,
-				Type:     c.Type,
-				Expected: c.Expected,
-				Actual:   c.Actual,
-				Passed:   c.Passed,
-				Duration: c.Duration.String(),
-			}
-			if c.Error != nil {
-				jc.Error = c.Error.Error()
-			}
-			jr.Checks = append(jr.Checks, jc)
-		}
-
-		output = append(output, jr)
-	}
-
 	enc := json.NewEncoder(r.Writer)
 	if r.Pretty {
 		enc.SetIndent("", "  ")
 	}
-	return enc.Encode(output)
+	return enc.Encode(jsonResultsFromDrillResults(results))
 }

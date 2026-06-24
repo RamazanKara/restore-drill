@@ -7,17 +7,38 @@ versioning.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-06-24
+
 ### Changed
 
+- Split the CLI entrypoint into focused command, runtime, and reporting modules
+  while preserving v1 CLI flags and output contracts.
 - Refactored documentation navigation, roadmap naming, local demo guidance, and
   CI/CD examples for readability and consistency with the current workflows.
+- Consolidated repeated provider command detection, command selection, backup
+  path, and shell quoting helpers.
+- Replaced hardcoded compliance-style report language with restore evidence
+  checks and neutral evidence report wording.
+- Updated Docker SDK, Docker connections, Prometheus, Cobra, AWS SDK modules,
+  and Kubernetes modules while keeping the Go 1.25 toolchain line.
+- Updated Kubernetes smoke CI to kind `v0.32.0` with
+  `kindest/node:v1.36.1`; local smoke checks now report kind/cgroup
+  prerequisites explicitly.
+
+### Removed
+
+- Removed unused runtime/reporting internals, including unused restore result
+  fields, runtime log streaming, dead Docker readiness helper, unused default
+  ports, unused Prometheus collector globals, and the unused JSON file reporter.
+- Removed per-drill Prometheus alert examples. Deprecated per-drill
+  `prometheus` alerts remain accepted as no-ops for v1 config compatibility.
 
 ## [1.0.1] - 2026-05-25
 
 ### Added
 
 - Added configured run report artifacts: `reporting.format: [json, html]` with
-  `reporting.output` now writes per-run JSON and compliance HTML files.
+  `reporting.output` now writes per-run JSON and evidence HTML files.
 - Added webhook alert headers for authenticated delivery.
 - Added reporting documentation covering JSON compatibility, webhook payloads,
   and Prometheus alert examples.
@@ -52,7 +73,7 @@ versioning.
   history appends preserved as separate entries.
 - Added provider-specific check validation and preflight coverage for required
   restore-image tools.
-- Added per-check failure evidence to compliance reports.
+- Added per-check failure evidence to evidence reports.
 - Added lifecycle regression tests and Kubernetes restore-target pod
   customization for service accounts, pull secrets, labels, and annotations.
 - Made the Helm chart fail fast when neither inline config nor an existing

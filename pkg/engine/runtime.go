@@ -18,9 +18,6 @@ type Runtime interface {
 
 	// Destroy tears down the container and cleans up.
 	Destroy(ctx context.Context, c Container) error
-
-	// Logs returns the container's log stream.
-	Logs(ctx context.Context, c Container) (io.ReadCloser, error)
 }
 
 // Container represents a running ephemeral container.

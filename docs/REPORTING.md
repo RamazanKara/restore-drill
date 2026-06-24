@@ -14,7 +14,7 @@ truth:
 | --- | --- |
 | Human operator watching a manual drill | stdout table |
 | CI gate or audit pipeline | run JSON |
-| Periodic review by humans | HTML compliance report |
+| Periodic review by humans | HTML evidence report |
 | Paging or chat notification | webhook |
 | SLO/RPO alerting | Pushgateway metrics |
 
@@ -31,7 +31,9 @@ reporting:
 
 `output` is treated as a directory when it already exists as a directory, ends
 with `/`, has no file extension, or more than one file format is enabled.
-Generated file names include the run timestamp:
+Generated file names include the run timestamp. The HTML file keeps the
+`restore-drill-compliance-*` prefix for v1 compatibility with existing
+automation:
 
 - `restore-drill-run-20260524T120000Z.json`
 - `restore-drill-compliance-20260524T120000Z.html`
@@ -42,7 +44,7 @@ When a single format is enabled and `output` has a file extension, restore-drill
 
 - `json`: the per-run drill result array, using the same shape as
   `restore-drill run --format json`
-- `html`: a compliance report generated from local history for the configured
+- `html`: a restore evidence report generated from local history for the configured
   retention window
 - `table`: accepted for stdout compatibility; it does not create a file
 
@@ -83,21 +85,21 @@ Compatibility policy for v1:
 - Fields may become omitted only when they are already optional and empty.
 - Breaking schema changes wait for a new major version.
 
-## HTML compliance reports
+## HTML Evidence Reports
 
 HTML reports are generated from local history and include:
 
 - total, passed, and failed drill counts
 - success rate
 - average and maximum RTO
-- compliance control status
+- restore-drill evidence check status
 - drill history
 - per-check failure evidence with expected, actual, and error text
 
 Use the explicit report command when you want an ad hoc report for a different window:
 
 ```bash
-restore-drill report --last 90 --output compliance-report.html
+restore-drill report --last 90 --output restore-evidence.html
 restore-drill report --format json --last 30
 ```
 

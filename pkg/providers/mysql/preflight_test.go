@@ -136,10 +136,6 @@ func (f *fakeRuntime) Destroy(context.Context, engine.Container) error {
 	return nil
 }
 
-func (f *fakeRuntime) Logs(context.Context, engine.Container) (io.ReadCloser, error) {
-	return io.NopCloser(strings.NewReader("")), nil
-}
-
 type fakeContainer struct{}
 
 func (fakeContainer) ID() string {

@@ -65,7 +65,7 @@ Preflight checks fail fast when required commands are missing.
 - Use `reporting.format: [json, html]` with a durable `reporting.output` path
   when every scheduled run should leave file artifacts.
 - Archive HTML reports for human review and JSON reports for automation.
-- HTML compliance reports include per-check failure evidence, expected values,
+- HTML evidence reports include per-check failure evidence, expected values,
   actual values, provider errors, and RTO/RPO summaries.
 - Treat retained `--no-cleanup` targets as sensitive because they may contain
   restored production-like data.

@@ -2,10 +2,46 @@
 set -euo pipefail
 
 CLUSTER_NAME="${KIND_CLUSTER_NAME:-restore-drill-ci}"
-NODE_IMAGE="${KIND_NODE_IMAGE:-kindest/node:v1.31.4}"
+NODE_IMAGE="${KIND_NODE_IMAGE:-kindest/node:v1.36.1}"
 NAMESPACE="${RESTORE_DRILL_K8S_NAMESPACE:-default}"
 HELM_NAMESPACE="${RESTORE_DRILL_HELM_NAMESPACE:-restore-drill}"
 KEEP_CLUSTER="${KEEP_KIND_CLUSTER:-0}"
+
+require_kind_for_node_image() {
+  if [[ ! "${NODE_IMAGE}" =~ ^kindest/node:v1\.36\. ]]; then
+    return
+  fi
+
+  local current required oldest
+  current="$(kind version | awk '{print $2}')"
+  required="v0.32.0"
+  oldest="$(printf '%s\n%s\n' "${required}" "${current}" | sort -V | head -n1)"
+  if [[ -z "${current}" || "${oldest}" != "${required}" ]]; then
+    echo "${NODE_IMAGE} requires kind ${required} or newer; found ${current:-unknown}" >&2
+    exit 1
+  fi
+}
+
+require_cgroup_v2_for_node_image() {
+  if [[ ! "${NODE_IMAGE}" =~ ^kindest/node:v1\.([0-9]+)\. ]]; then
+    return
+  fi
+
+  local minor cgroup_version
+  minor="${BASH_REMATCH[1]}"
+  if ((minor < 35)); then
+    return
+  fi
+
+  cgroup_version="$(docker info --format '{{.CgroupVersion}}' 2>/dev/null || true)"
+  if [[ "${cgroup_version}" == "1" ]]; then
+    echo "${NODE_IMAGE} requires cgroup v2; Docker reports cgroup v1" >&2
+    exit 1
+  fi
+}
+
+require_kind_for_node_image
+require_cgroup_v2_for_node_image
 
 created_cluster=0
 created_helm_namespace=0

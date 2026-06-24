@@ -9,7 +9,7 @@ import (
 	"github.com/RamazanKara/restore-drill/internal/state"
 )
 
-func TestBuildComplianceReportIncludesFailureEvidence(t *testing.T) {
+func TestBuildEvidenceReportIncludesFailureEvidence(t *testing.T) {
 	ts := time.Date(2026, 5, 20, 14, 30, 0, 0, time.UTC)
 	runs := []*state.LastRun{
 		{
@@ -42,7 +42,7 @@ func TestBuildComplianceReportIncludesFailureEvidence(t *testing.T) {
 		},
 	}
 
-	report := BuildComplianceReport(runs, ts.Add(-time.Hour))
+	report := BuildEvidenceReport(runs, ts.Add(-time.Hour))
 	if len(report.FailureEvidence) != 2 {
 		t.Fatalf("expected 2 failure evidence entries, got %d: %#v", len(report.FailureEvidence), report.FailureEvidence)
 	}
@@ -56,7 +56,7 @@ func TestBuildComplianceReportIncludesFailureEvidence(t *testing.T) {
 
 func TestRenderHTMLIncludesFailureEvidence(t *testing.T) {
 	ts := time.Date(2026, 5, 20, 14, 30, 0, 0, time.UTC)
-	report := &ComplianceReport{
+	report := &EvidenceReport{
 		GeneratedAt: ts,
 		PeriodStart: ts.Add(-24 * time.Hour),
 		PeriodEnd:   ts,

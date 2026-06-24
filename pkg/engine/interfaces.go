@@ -25,8 +25,6 @@ type PreflightProvider interface {
 // RestoreResult holds metadata from a restore operation.
 type RestoreResult struct {
 	BackupTimestamp string
-	BackupSize      int64
-	Duration        int64 // milliseconds
 }
 
 // ValidationResult holds results from provider-specific validation.

@@ -154,6 +154,34 @@ reporting:
 	}
 }
 
+func TestParseConfig_DeprecatedPrometheusAlertAccepted(t *testing.T) {
+	yaml := `
+drills:
+  - name: test-pg
+    provider: postgres
+    backup:
+      tool: pg_dump
+      source: /backups/latest.sql
+    restore:
+      container:
+        image: postgres:16
+    checks:
+      - name: check
+        type: query
+        sql: "SELECT 1"
+        expect: "== 1"
+    alerts:
+      - type: prometheus
+`
+	cfg, err := ParseConfig([]byte(yaml))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := cfg.Drills[0].Alerts[0].Type; got != "prometheus" {
+		t.Fatalf("expected prometheus alert to remain parsed, got %q", got)
+	}
+}
+
 func TestParseConfig_ProviderToolAliases(t *testing.T) {
 	tests := []struct {
 		name string

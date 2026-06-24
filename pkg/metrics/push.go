@@ -11,6 +11,8 @@ import (
 	"github.com/RamazanKara/restore-drill/pkg/engine"
 )
 
+const namespace = "restore_drill"
+
 // PushResults pushes drill metrics to a Prometheus Pushgateway.
 func PushResults(results []engine.DrillResult, pushgatewayURL string, labels map[string]string) error {
 	env := labels["environment"]

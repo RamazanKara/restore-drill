@@ -42,16 +42,16 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           RESTORE_DRILL_WEBHOOK_TOKEN: ${{ secrets.RESTORE_DRILL_WEBHOOK_TOKEN }}
 
-      - name: Generate compliance report
+      - name: Generate restore evidence report
         if: always()
-        run: restore-drill report --last 90 --output compliance-report.html
+        run: restore-drill report --last 90 --output restore-evidence.html
 
       - name: Upload report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: restore-drill-report
-          path: compliance-report.html
+          path: restore-evidence.html
 ```
 
 For scheduled evidence files from every run, configure:
@@ -64,6 +64,12 @@ reporting:
 ```
 
 Then upload `reports/**` as an artifact.
+
+The repository Kubernetes smoke test defaults to `kindest/node:v1.36.1` with
+kind `v0.32.0`. That node image requires Docker cgroup v2. On older local
+hosts that still report Docker cgroup v1, keep CI on the default image but run
+local smoke checks with a compatible override such as
+`KIND_NODE_IMAGE=kindest/node:v1.34.0 make test-k8s`.
 
 ## GitLab CI
 
@@ -82,14 +88,14 @@ backup-drill:
     - export PATH="$(go env GOPATH)/bin:$PATH"
   script:
     - restore-drill run --config drill.yaml --runtime docker --format json
-    - restore-drill report --last 90 --output compliance-report.html
+    - restore-drill report --last 90 --output restore-evidence.html
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
     - if: $CI_PIPELINE_SOURCE == "web"
   artifacts:
     when: always
     paths:
-      - compliance-report.html
+      - restore-evidence.html
       - reports/
 ```
 
@@ -162,10 +168,10 @@ kubectl exec -n restore-drill -it <pod-name> -- sh
 
 ## Reports
 
-Generate compliance reports from local history:
+Generate restore evidence reports from local history:
 
 ```bash
-restore-drill report --last 90 --output compliance-report.html
+restore-drill report --last 90 --output restore-evidence.html
 restore-drill report --format json --last 30
 ```
 

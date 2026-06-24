@@ -31,7 +31,8 @@ func TestRestorePgBackRestBuildsPITRCommand(t *testing.T) {
 	}
 
 	cmd := rt.findCommand("pgbackrest")
-	assertCommandContains(t, cmd,
+	assertCommandContains(
+		t, cmd,
 		"restore",
 		"--stanza", "main",
 		"--repo1-type", "s3",
@@ -125,7 +126,8 @@ func TestRestorePgRestoreUsesCustomArchiveCommand(t *testing.T) {
 		t.Fatalf("restore pg_restore: %v", err)
 	}
 
-	assertCommandContains(t, rt.findCommand("pg_restore"),
+	assertCommandContains(
+		t, rt.findCommand("pg_restore"),
 		"-U", "postgres",
 		"-d", "postgres",
 		"--clean",
@@ -150,7 +152,8 @@ func TestRestorePgBackRestMaterializesLocalArchive(t *testing.T) {
 	if script := rt.findShellCommandContaining("physical backup archive materialization"); !strings.Contains(script, "tar -xzf") {
 		t.Fatalf("expected tar archive materialization command, got %q", script)
 	}
-	assertCommandContains(t, rt.findCommand("pgbackrest"),
+	assertCommandContains(
+		t, rt.findCommand("pgbackrest"),
 		"--repo1-path",
 		"/tmp/restore-drill-backups/pgbackrest-repo",
 	)
@@ -194,10 +197,6 @@ func (r *restoreRuntime) CopyTo(context.Context, engine.Container, string, io.Re
 
 func (r *restoreRuntime) Destroy(context.Context, engine.Container) error {
 	return nil
-}
-
-func (r *restoreRuntime) Logs(context.Context, engine.Container) (io.ReadCloser, error) {
-	return io.NopCloser(strings.NewReader("")), nil
 }
 
 func (r *restoreRuntime) findCommand(name string) []string {

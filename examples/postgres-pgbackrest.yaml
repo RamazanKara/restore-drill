@@ -37,8 +37,6 @@ drills:
         type: extensions
         expect: "pgcrypto, uuid-ossp, pg_stat_statements"
     alerts:
-      - type: prometheus
-        endpoint: http://pushgateway:9091
       - type: webhook
         url: ${RESTORE_DRILL_WEBHOOK_URL:-https://example.invalid/restore-drill-webhook}
         headers:

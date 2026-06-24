@@ -323,8 +323,6 @@ func GetDefaultPorts(provider string) []int {
 		return []int{3306}
 	case "redis":
 		return []int{6379}
-	case "etcd":
-		return []int{2379}
 	default:
 		return nil
 	}

@@ -35,7 +35,7 @@ It intentionally does not:
 - Container image: `ghcr.io/ramazankara/restore-drill`
 - Supported providers: PostgreSQL, MySQL/MariaDB, Redis
 - Supported runtimes: Docker and Kubernetes
-- Supported outputs: stdout table, run JSON, HTML compliance report, webhook,
+- Supported outputs: stdout table, run JSON, HTML evidence report, webhook,
   local history, Prometheus Pushgateway
 
 The public contracts that must remain compatible within v1 are documented in
@@ -77,7 +77,7 @@ checks.
 - Added JSON report shape coverage and documented the v1 compatibility contract.
 - Added configured run report artifacts through `reporting.format` and
   `reporting.output`.
-- Added per-check failure evidence to HTML compliance reports.
+- Added per-check failure evidence to HTML evidence reports.
 - Added webhook headers and context-aware retry behavior.
 - Confirmed Pushgateway replacement behavior for repeated CronJob runs.
 - Made latest-run and history persistence atomic.

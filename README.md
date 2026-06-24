@@ -40,7 +40,7 @@ inventory infrastructure, or replace observability platforms.
 | Backup tools | `pg_dump`, `pg_restore`, `pgbackrest`, `wal-g`/`walg`, `mysqldump`, `xtrabackup`, `mariabackup`, Redis RDB, Redis AOF |
 | Backup sources | Local files/directories, mounted target paths, S3-compatible objects and prefixes |
 | Runtimes | Docker and Kubernetes |
-| Outputs | stdout table, run JSON, HTML compliance reports, webhooks, local history, Prometheus Pushgateway |
+| Outputs | stdout table, run JSON, HTML evidence reports, webhooks, local history, Prometheus Pushgateway |
 | Kubernetes | Helm CronJob, namespace-scoped RBAC, restore pod labels/annotations, image pull secrets, resources, NetworkPolicy |
 
 Provider restore images must include the database runtime, client tools, and the
@@ -78,7 +78,7 @@ restore-drill validate --config examples/drill.yaml
 restore-drill run --config drill.yaml --runtime docker
 restore-drill run --config drill.yaml --runtime docker --parallel --format json
 restore-drill status
-restore-drill report --last 90 --output compliance-report.html
+restore-drill report --last 90 --output restore-evidence.html
 ```
 
 Incident mode keeps the restore target available for inspection:

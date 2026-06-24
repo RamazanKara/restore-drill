@@ -79,10 +79,6 @@ func (f *fakeRuntime) Destroy(ctx context.Context, c engine.Container) error {
 	return nil
 }
 
-func (f *fakeRuntime) Logs(ctx context.Context, c engine.Container) (io.ReadCloser, error) {
-	return io.NopCloser(bytes.NewReader(nil)), nil
-}
-
 func TestStageLocalFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "dump.sql")

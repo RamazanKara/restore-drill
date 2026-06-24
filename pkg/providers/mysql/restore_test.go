@@ -22,13 +22,15 @@ func TestRestoreXtrabackupRunsPrepareCopyBackAndRestart(t *testing.T) {
 		t.Fatalf("restore xtrabackup: %v", err)
 	}
 
-	assertCommandContains(t, rt.findCommand("xtrabackup", "--prepare"),
+	assertCommandContains(
+		t, rt.findCommand("xtrabackup", "--prepare"),
 		"xtrabackup",
 		"--prepare",
 		"--target-dir",
 		"/mounted/xtrabackup",
 	)
-	assertCommandContains(t, rt.findCommand("xtrabackup", "--copy-back"),
+	assertCommandContains(
+		t, rt.findCommand("xtrabackup", "--copy-back"),
 		"xtrabackup",
 		"--copy-back",
 		"--target-dir",
@@ -52,13 +54,15 @@ func TestRestoreMariabackupRunsPrepareCopyBackAndRestart(t *testing.T) {
 		t.Fatalf("restore mariabackup: %v", err)
 	}
 
-	assertCommandContains(t, rt.findCommand("mariabackup", "--prepare"),
+	assertCommandContains(
+		t, rt.findCommand("mariabackup", "--prepare"),
 		"mariabackup",
 		"--prepare",
 		"--target-dir",
 		"/mounted/mariabackup",
 	)
-	assertCommandContains(t, rt.findCommand("mariabackup", "--copy-back"),
+	assertCommandContains(
+		t, rt.findCommand("mariabackup", "--copy-back"),
 		"mariabackup",
 		"--copy-back",
 		"--target-dir",
@@ -105,11 +109,13 @@ func TestRestoreXtrabackupMaterializesArchiveBeforePrepare(t *testing.T) {
 	if script := rt.findShellCommandContaining("physical backup archive materialization"); !strings.Contains(script, "tar -xzf") {
 		t.Fatalf("expected tar archive materialization command, got %q", script)
 	}
-	assertCommandContains(t, rt.findCommand("xtrabackup", "--prepare"),
+	assertCommandContains(
+		t, rt.findCommand("xtrabackup", "--prepare"),
 		"--target-dir",
 		"/tmp/restore-drill-backups/mysql-physical",
 	)
-	assertCommandContains(t, rt.findCommand("xtrabackup", "--copy-back"),
+	assertCommandContains(
+		t, rt.findCommand("xtrabackup", "--copy-back"),
 		"--target-dir",
 		"/tmp/restore-drill-backups/mysql-physical",
 	)
@@ -160,10 +166,6 @@ func (r *restoreRuntime) CopyTo(context.Context, engine.Container, string, io.Re
 
 func (r *restoreRuntime) Destroy(context.Context, engine.Container) error {
 	return nil
-}
-
-func (r *restoreRuntime) Logs(context.Context, engine.Container) (io.ReadCloser, error) {
-	return io.NopCloser(strings.NewReader("")), nil
 }
 
 func (r *restoreRuntime) findCommand(name, marker string) []string {

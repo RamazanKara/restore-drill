@@ -10,6 +10,7 @@ import (
 
 	"github.com/RamazanKara/restore-drill/pkg/backup"
 	"github.com/RamazanKara/restore-drill/pkg/engine"
+	"github.com/RamazanKara/restore-drill/pkg/providers/internal/targetcmd"
 )
 
 // Provider implements engine.Provider for PostgreSQL.
@@ -29,22 +30,22 @@ func (p *Provider) Preflight(ctx context.Context, rt engine.Runtime, cfg engine.
 	switch cfg.Tool {
 	case "pgbackrest":
 		required = append(required, "pg_ctl", "pgbackrest")
-		required = append(required, backup.ArchiveRequirements(configuredBackupPath(cfg))...)
+		required = append(required, backup.ArchiveRequirements(targetcmd.ConfiguredBackupPath(cfg))...)
 	case "pg_restore":
 		required = append(required, "pg_restore")
 	case "pg_dump":
-		if strings.HasSuffix(configuredBackupPath(cfg), ".gz") {
+		if strings.HasSuffix(targetcmd.ConfiguredBackupPath(cfg), ".gz") {
 			required = append(required, "gzip")
 		}
 	case "wal-g", "walg":
 		required = append(required, "pg_ctl")
-		required = append(required, backup.ArchiveRequirements(configuredBackupPath(cfg))...)
-		if err := commandExistsAny(ctx, rt, target, "WAL-G", "wal-g", "walg"); err != nil {
+		required = append(required, backup.ArchiveRequirements(targetcmd.ConfiguredBackupPath(cfg))...)
+		if err := targetcmd.CommandExistsAny(ctx, rt, target, "WAL-G", "wal-g", "walg"); err != nil {
 			return err
 		}
 	}
 	for _, cmd := range required {
-		if err := commandExists(ctx, rt, target, cmd); err != nil {
+		if err := targetcmd.CommandExists(ctx, rt, target, cmd); err != nil {
 			return err
 		}
 	}
@@ -52,15 +53,13 @@ func (p *Provider) Preflight(ctx context.Context, rt engine.Runtime, cfg engine.
 }
 
 func (p *Provider) Restore(ctx context.Context, rt engine.Runtime, cfg engine.BackupConfig, target engine.Container) (*engine.RestoreResult, error) {
-	start := time.Now()
-
 	switch cfg.Tool {
 	case "pgbackrest":
-		return p.restorePgBackRest(ctx, rt, cfg, target, start)
+		return p.restorePgBackRest(ctx, rt, cfg, target)
 	case "pg_dump", "pg_restore":
-		return p.restorePgDump(ctx, rt, cfg, target, start)
+		return p.restorePgDump(ctx, rt, cfg, target)
 	case "wal-g", "walg":
-		return p.restoreWalG(ctx, rt, cfg, target, start)
+		return p.restoreWalG(ctx, rt, cfg, target)
 	default:
 		return nil, fmt.Errorf("postgres: unsupported backup tool %q", cfg.Tool)
 	}
@@ -147,7 +146,7 @@ func (p *Provider) waitReady(ctx context.Context, rt engine.Runtime, target engi
 	return fmt.Errorf("postgres: timeout waiting for database to accept connections")
 }
 
-func (p *Provider) restorePgBackRest(ctx context.Context, rt engine.Runtime, cfg engine.BackupConfig, target engine.Container, start time.Time) (*engine.RestoreResult, error) {
+func (p *Provider) restorePgBackRest(ctx context.Context, rt engine.Runtime, cfg engine.BackupConfig, target engine.Container) (*engine.RestoreResult, error) {
 	slog.Info("restoring via pgbackrest", "stanza", cfg.Stanza)
 
 	if err := p.stopPostgresIfRunning(ctx, rt, target); err != nil {
@@ -212,11 +211,10 @@ func (p *Provider) restorePgBackRest(ctx context.Context, rt engine.Runtime, cfg
 
 	return &engine.RestoreResult{
 		BackupTimestamp: ts,
-		Duration:        time.Since(start).Milliseconds(),
 	}, nil
 }
 
-func (p *Provider) restorePgDump(ctx context.Context, rt engine.Runtime, cfg engine.BackupConfig, target engine.Container, start time.Time) (*engine.RestoreResult, error) {
+func (p *Provider) restorePgDump(ctx context.Context, rt engine.Runtime, cfg engine.BackupConfig, target engine.Container) (*engine.RestoreResult, error) {
 	slog.Info("restoring via pg_dump", "source", cfg.Source)
 
 	// Wait for PostgreSQL to be ready
@@ -235,7 +233,7 @@ func (p *Provider) restorePgDump(ctx context.Context, rt engine.Runtime, cfg eng
 	case cfg.Tool == "pg_restore":
 		cmd = []string{"pg_restore", "-U", "postgres", "-d", "postgres", "--clean", "--if-exists", destPath}
 	case strings.HasSuffix(destPath, ".gz"):
-		cmd = []string{"sh", "-c", fmt.Sprintf("gzip -dc %s | psql -U postgres -v ON_ERROR_STOP=1", shellQuote(destPath))}
+		cmd = []string{"sh", "-c", fmt.Sprintf("gzip -dc %s | psql -U postgres -v ON_ERROR_STOP=1", targetcmd.ShellQuote(destPath))}
 	default:
 		cmd = []string{"psql", "-U", "postgres", "-v", "ON_ERROR_STOP=1", "-f", destPath}
 	}
@@ -248,14 +246,13 @@ func (p *Provider) restorePgDump(ctx context.Context, rt engine.Runtime, cfg eng
 
 	return &engine.RestoreResult{
 		BackupTimestamp: ts,
-		Duration:        time.Since(start).Milliseconds(),
 	}, nil
 }
 
-func (p *Provider) restoreWalG(ctx context.Context, rt engine.Runtime, cfg engine.BackupConfig, target engine.Container, start time.Time) (*engine.RestoreResult, error) {
+func (p *Provider) restoreWalG(ctx context.Context, rt engine.Runtime, cfg engine.BackupConfig, target engine.Container) (*engine.RestoreResult, error) {
 	slog.Info("restoring via wal-g", "source", cfg.Source)
 
-	walGBin, err := firstAvailableCommand(ctx, rt, target, "wal-g", "walg")
+	walGBin, err := targetcmd.FirstAvailableCommand(ctx, rt, target, "wal-g", "walg")
 	if err != nil {
 		return nil, err
 	}
@@ -283,18 +280,18 @@ func (p *Provider) restoreWalG(ctx context.Context, rt engine.Runtime, cfg engin
 	cmd := []string{walGBin, "backup-fetch", "/var/lib/postgresql/data", "LATEST"}
 	restoreCommand := walGBin + " wal-fetch %f %p"
 	if repoPath != "" {
-		env := "WALG_FILE_PREFIX=" + shellQuote(repoPath) + " "
+		env := "WALG_FILE_PREFIX=" + targetcmd.ShellQuote(repoPath) + " "
 		cmd = []string{"sh", "-c", env + walGBin + " backup-fetch /var/lib/postgresql/data LATEST"}
-		restoreCommand = "WALG_FILE_PREFIX=" + shellQuote(repoPath) + " " + walGBin + " wal-fetch %f %p"
+		restoreCommand = "WALG_FILE_PREFIX=" + targetcmd.ShellQuote(repoPath) + " " + walGBin + " wal-fetch %f %p"
 	}
 	out, err := rt.Exec(ctx, target, cmd)
 	if err != nil {
 		return nil, fmt.Errorf("wal-g backup-fetch: %w\noutput: %s", err, string(out))
 	}
 
-	recoveryLines := fmt.Sprintf("restore_command = '%s'\n", shellEscape(restoreCommand))
+	recoveryLines := fmt.Sprintf("restore_command = '%s'\n", targetcmd.ShellEscapePostgresLiteral(restoreCommand))
 	if cfg.Target != "" && cfg.Target != "latest" {
-		recoveryLines += fmt.Sprintf("recovery_target_time = '%s'\n", shellEscape(cfg.Target))
+		recoveryLines += fmt.Sprintf("recovery_target_time = '%s'\n", targetcmd.ShellEscapePostgresLiteral(cfg.Target))
 	}
 	recoveryConfig := "touch /var/lib/postgresql/data/recovery.signal && cat >> /var/lib/postgresql/data/postgresql.auto.conf <<'RESTORE_DRILL_RECOVERY'\n" +
 		recoveryLines +
@@ -315,7 +312,6 @@ func (p *Provider) restoreWalG(ctx context.Context, rt engine.Runtime, cfg engin
 
 	return &engine.RestoreResult{
 		BackupTimestamp: ts,
-		Duration:        time.Since(start).Milliseconds(),
 	}, nil
 }
 
@@ -390,42 +386,4 @@ func (p *Provider) startPostgres(ctx context.Context, rt engine.Runtime, target 
 		return fmt.Errorf("starting postgres after %s restore: %w\noutput: %s", tool, err, string(out))
 	}
 	return nil
-}
-
-func configuredBackupPath(cfg engine.BackupConfig) string {
-	if cfg.Source != "" {
-		return cfg.Source
-	}
-	return cfg.Repo.Prefix
-}
-
-func commandExists(ctx context.Context, rt engine.Runtime, target engine.Container, name string) error {
-	if _, err := rt.Exec(ctx, target, []string{"sh", "-c", "command -v " + shellQuote(name)}); err != nil {
-		return fmt.Errorf("required command %q not found in restore image", name)
-	}
-	return nil
-}
-
-func commandExistsAny(ctx context.Context, rt engine.Runtime, target engine.Container, label string, names ...string) error {
-	if _, err := firstAvailableCommand(ctx, rt, target, names...); err == nil {
-		return nil
-	}
-	return fmt.Errorf("required %s (%s) not found in restore image", label, strings.Join(names, " or "))
-}
-
-func firstAvailableCommand(ctx context.Context, rt engine.Runtime, target engine.Container, names ...string) (string, error) {
-	for _, name := range names {
-		if _, err := rt.Exec(ctx, target, []string{"sh", "-c", "command -v " + shellQuote(name)}); err == nil {
-			return name, nil
-		}
-	}
-	return "", fmt.Errorf("required command %q not found in restore image", strings.Join(names, " or "))
-}
-
-func shellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
-}
-
-func shellEscape(s string) string {
-	return strings.ReplaceAll(s, "'", "''")
 }

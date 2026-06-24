@@ -75,8 +75,10 @@ jobs:
 
       - uses: helm/kind-action@v1
         with:
+          version: v0.32.0
+          kubectl_version: v1.36.1
           cluster_name: restore-drill-ci
-          node_image: kindest/node:v1.31.4
+          node_image: kindest/node:v1.36.1
 
       - name: Kubernetes runtime smoke test
         run: KEEP_KIND_CLUSTER=1 make test-k8s

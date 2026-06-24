@@ -7,15 +7,13 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net"
 	"strconv"
-	"time"
 
 	"github.com/RamazanKara/restore-drill/pkg/engine"
-	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/api/types/container"
+	cerrdefs "github.com/containerd/errdefs"
+	dockercontainer "github.com/docker/docker/api/types/container"
+	imagetypes "github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
-	"github.com/docker/docker/errdefs"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/go-connections/nat"
 )
@@ -71,7 +69,7 @@ func (r *Runtime) Create(ctx context.Context, spec engine.ContainerSpec) (engine
 	}
 
 	// Container config
-	containerConfig := &container.Config{
+	containerConfig := &dockercontainer.Config{
 		Image:        spec.Image,
 		Env:          env,
 		ExposedPorts: exposedPorts,
@@ -79,7 +77,7 @@ func (r *Runtime) Create(ctx context.Context, spec engine.ContainerSpec) (engine
 	}
 
 	// Host config with resource limits
-	hostConfig := &container.HostConfig{
+	hostConfig := &dockercontainer.HostConfig{
 		PortBindings: portBindings,
 		AutoRemove:   false,
 	}
@@ -96,16 +94,16 @@ func (r *Runtime) Create(ctx context.Context, spec engine.ContainerSpec) (engine
 		return nil, fmt.Errorf("docker: create container: %w", err)
 	}
 
-	if err := r.client.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
+	if err := r.client.ContainerStart(ctx, resp.ID, dockercontainer.StartOptions{}); err != nil {
 		// Cleanup on failure
-		_ = r.client.ContainerRemove(ctx, resp.ID, container.RemoveOptions{Force: true})
+		_ = r.client.ContainerRemove(ctx, resp.ID, dockercontainer.RemoveOptions{Force: true})
 		return nil, fmt.Errorf("docker: start container: %w", err)
 	}
 
 	// Inspect to get port mappings
 	inspect, err := r.client.ContainerInspect(ctx, resp.ID)
 	if err != nil {
-		_ = r.client.ContainerRemove(ctx, resp.ID, container.RemoveOptions{Force: true})
+		_ = r.client.ContainerRemove(ctx, resp.ID, dockercontainer.RemoveOptions{Force: true})
 		return nil, fmt.Errorf("docker: inspect container: %w", err)
 	}
 
@@ -129,25 +127,25 @@ func (r *Runtime) Create(ctx context.Context, spec engine.ContainerSpec) (engine
 	return dc, nil
 }
 
-func (r *Runtime) ensureImage(ctx context.Context, image string) error {
-	if _, _, err := r.client.ImageInspectWithRaw(ctx, image); err == nil {
-		slog.Debug("using local image", "image", image)
+func (r *Runtime) ensureImage(ctx context.Context, imageRef string) error {
+	if _, err := r.client.ImageInspect(ctx, imageRef); err == nil {
+		slog.Debug("using local image", "image", imageRef)
 		return nil
-	} else if !errdefs.IsNotFound(err) {
-		return fmt.Errorf("docker: inspect image %s: %w", image, err)
+	} else if !cerrdefs.IsNotFound(err) {
+		return fmt.Errorf("docker: inspect image %s: %w", imageRef, err)
 	}
 
-	slog.Debug("pulling image", "image", image)
-	reader, err := r.client.ImagePull(ctx, image, types.ImagePullOptions{})
+	slog.Debug("pulling image", "image", imageRef)
+	reader, err := r.client.ImagePull(ctx, imageRef, imagetypes.PullOptions{})
 	if err != nil {
-		return fmt.Errorf("docker: pull image %s: %w", image, err)
+		return fmt.Errorf("docker: pull image %s: %w", imageRef, err)
 	}
 	if _, err := io.Copy(io.Discard, reader); err != nil {
 		_ = reader.Close()
-		return fmt.Errorf("docker: read image pull output for %s: %w", image, err)
+		return fmt.Errorf("docker: read image pull output for %s: %w", imageRef, err)
 	}
 	if err := reader.Close(); err != nil {
-		return fmt.Errorf("docker: close image pull stream for %s: %w", image, err)
+		return fmt.Errorf("docker: close image pull stream for %s: %w", imageRef, err)
 	}
 	return nil
 }
@@ -156,7 +154,7 @@ func (r *Runtime) ensureImage(ctx context.Context, image string) error {
 func (r *Runtime) Exec(ctx context.Context, c engine.Container, cmd []string) ([]byte, error) {
 	dc := c.(*dockerContainer)
 
-	execConfig := types.ExecConfig{
+	execConfig := dockercontainer.ExecOptions{
 		Cmd:          cmd,
 		AttachStdout: true,
 		AttachStderr: true,
@@ -167,7 +165,7 @@ func (r *Runtime) Exec(ctx context.Context, c engine.Container, cmd []string) ([
 		return nil, fmt.Errorf("docker: exec create: %w", err)
 	}
 
-	attachResp, err := r.client.ContainerExecAttach(ctx, execResp.ID, types.ExecStartCheck{})
+	attachResp, err := r.client.ContainerExecAttach(ctx, execResp.ID, dockercontainer.ExecAttachOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("docker: exec attach: %w", err)
 	}
@@ -194,7 +192,7 @@ func (r *Runtime) Exec(ctx context.Context, c engine.Container, cmd []string) ([
 // CopyTo copies data from a reader into the container filesystem.
 func (r *Runtime) CopyTo(ctx context.Context, c engine.Container, dest string, src io.Reader) error {
 	dc := c.(*dockerContainer)
-	return r.client.CopyToContainer(ctx, dc.id, dest, src, types.CopyToContainerOptions{})
+	return r.client.CopyToContainer(ctx, dc.id, dest, src, dockercontainer.CopyToContainerOptions{})
 }
 
 // Destroy stops and removes the container.
@@ -203,43 +201,7 @@ func (r *Runtime) Destroy(ctx context.Context, c engine.Container) error {
 	slog.Info("destroying container", "id", dc.id)
 
 	timeout := 10
-	stopOpts := container.StopOptions{Timeout: &timeout}
+	stopOpts := dockercontainer.StopOptions{Timeout: &timeout}
 	_ = r.client.ContainerStop(ctx, dc.id, stopOpts)
-	return r.client.ContainerRemove(ctx, dc.id, container.RemoveOptions{Force: true})
-}
-
-// Logs returns the container's log output.
-func (r *Runtime) Logs(ctx context.Context, c engine.Container) (io.ReadCloser, error) {
-	dc := c.(*dockerContainer)
-	return r.client.ContainerLogs(ctx, dc.id, container.LogsOptions{
-		ShowStdout: true,
-		ShowStderr: true,
-	})
-}
-
-// WaitReady polls a TCP port until it accepts connections or the context expires.
-func WaitReady(ctx context.Context, host string, port int, timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
-	addr := net.JoinHostPort(host, strconv.Itoa(port))
-
-	slog.Debug("waiting for port", "addr", addr, "timeout", timeout)
-
-	for time.Now().Before(deadline) {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-
-		dialer := net.Dialer{Timeout: 500 * time.Millisecond}
-		conn, err := dialer.DialContext(ctx, "tcp", addr)
-		if err == nil {
-			_ = conn.Close()
-			slog.Debug("port ready", "addr", addr)
-			return nil
-		}
-		time.Sleep(250 * time.Millisecond)
-	}
-
-	return fmt.Errorf("timeout waiting for %s to be ready", addr)
+	return r.client.ContainerRemove(ctx, dc.id, dockercontainer.RemoveOptions{Force: true})
 }

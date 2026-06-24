@@ -10,6 +10,7 @@ import (
 
 	"github.com/RamazanKara/restore-drill/pkg/backup"
 	"github.com/RamazanKara/restore-drill/pkg/engine"
+	"github.com/RamazanKara/restore-drill/pkg/providers/internal/targetcmd"
 )
 
 // Provider implements engine.Provider for Redis.
@@ -25,7 +26,7 @@ func (p *Provider) Name() string {
 
 func (p *Provider) Preflight(ctx context.Context, rt engine.Runtime, cfg engine.BackupConfig, target engine.Container, checks []engine.Check) error {
 	for _, cmd := range []string{"redis-server", "redis-cli"} {
-		if err := commandExists(ctx, rt, target, cmd); err != nil {
+		if err := targetcmd.CommandExists(ctx, rt, target, cmd); err != nil {
 			return err
 		}
 	}
@@ -33,14 +34,13 @@ func (p *Provider) Preflight(ctx context.Context, rt engine.Runtime, cfg engine.
 }
 
 func (p *Provider) Restore(ctx context.Context, rt engine.Runtime, cfg engine.BackupConfig, target engine.Container) (*engine.RestoreResult, error) {
-	start := time.Now()
 	slog.Info("restoring redis", "tool", cfg.Tool, "source", cfg.Source)
 
 	switch cfg.Tool {
 	case "rdb":
-		return p.restoreRDB(ctx, rt, cfg, target, start)
+		return p.restoreRDB(ctx, rt, cfg, target)
 	case "aof":
-		return p.restoreAOF(ctx, rt, cfg, target, start)
+		return p.restoreAOF(ctx, rt, cfg, target)
 	default:
 		return nil, fmt.Errorf("redis: unsupported backup tool %q", cfg.Tool)
 	}
@@ -155,7 +155,7 @@ func (p *Provider) waitReady(ctx context.Context, rt engine.Runtime, target engi
 	return fmt.Errorf("redis: timeout waiting for server to respond")
 }
 
-func (p *Provider) restoreRDB(ctx context.Context, rt engine.Runtime, cfg engine.BackupConfig, target engine.Container, start time.Time) (*engine.RestoreResult, error) {
+func (p *Provider) restoreRDB(ctx context.Context, rt engine.Runtime, cfg engine.BackupConfig, target engine.Container) (*engine.RestoreResult, error) {
 	staged, err := backup.Stage(ctx, rt, target, cfg)
 	if err != nil {
 		return nil, err
@@ -180,11 +180,10 @@ func (p *Provider) restoreRDB(ctx context.Context, rt engine.Runtime, cfg engine
 
 	return &engine.RestoreResult{
 		BackupTimestamp: ts,
-		Duration:        time.Since(start).Milliseconds(),
 	}, nil
 }
 
-func (p *Provider) restoreAOF(ctx context.Context, rt engine.Runtime, cfg engine.BackupConfig, target engine.Container, start time.Time) (*engine.RestoreResult, error) {
+func (p *Provider) restoreAOF(ctx context.Context, rt engine.Runtime, cfg engine.BackupConfig, target engine.Container) (*engine.RestoreResult, error) {
 	staged, err := backup.Stage(ctx, rt, target, cfg)
 	if err != nil {
 		return nil, err
@@ -204,9 +203,7 @@ func (p *Provider) restoreAOF(ctx context.Context, rt engine.Runtime, cfg engine
 		return nil, err
 	}
 
-	return &engine.RestoreResult{
-		Duration: time.Since(start).Milliseconds(),
-	}, nil
+	return &engine.RestoreResult{}, nil
 }
 
 // extractDBSize extracts the numeric value from DBSIZE output.
@@ -231,15 +228,4 @@ func extractDBSize(s string) string {
 
 func hasGlobMeta(s string) bool {
 	return strings.ContainsAny(s, "*?[")
-}
-
-func commandExists(ctx context.Context, rt engine.Runtime, target engine.Container, name string) error {
-	if _, err := rt.Exec(ctx, target, []string{"sh", "-c", "command -v " + shellQuote(name)}); err != nil {
-		return fmt.Errorf("required command %q not found in restore image", name)
-	}
-	return nil
-}
-
-func shellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
 }

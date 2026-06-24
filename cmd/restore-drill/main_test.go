@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -49,7 +50,7 @@ func TestBuildReporterPassesWebhookHeaders(t *testing.T) {
 		},
 	}
 
-	rep := buildReporter("table", cfg)
+	rep := buildReporter("table", cfg, io.Discard)
 	multi, ok := rep.(*reporter.Multi)
 	if !ok {
 		t.Fatalf("expected multi reporter, got %T", rep)
@@ -66,6 +67,24 @@ func TestBuildReporterPassesWebhookHeaders(t *testing.T) {
 	}
 	if webhook.Headers["Authorization"] != "Bearer test-token" {
 		t.Fatalf("expected Authorization header, got %#v", webhook.Headers)
+	}
+}
+
+func TestBuildReporterIgnoresDeprecatedPrometheusAlerts(t *testing.T) {
+	cfg := &engine.Config{
+		Drills: []engine.DrillConfig{
+			{
+				Name: "postgres-prod",
+				Alerts: []engine.AlertSpec{
+					{Type: "prometheus"},
+				},
+			},
+		},
+	}
+
+	rep := buildReporter("table", cfg, io.Discard)
+	if _, ok := rep.(*reporter.Stdout); !ok {
+		t.Fatalf("expected only stdout reporter for deprecated prometheus alert, got %T", rep)
 	}
 }
 

@@ -65,7 +65,6 @@ type Runtime interface {
     Exec(ctx context.Context, c Container, cmd []string) ([]byte, error)
     CopyTo(ctx context.Context, c Container, dest string, src io.Reader) error
     Destroy(ctx context.Context, c Container) error
-    Logs(ctx context.Context, c Container) (io.ReadCloser, error)
 }
 ```
 
@@ -75,7 +74,7 @@ Docker is used for local and CI runs. The Docker runtime creates one container
 per drill, copies staged input into it, executes provider commands, and removes
 the container after the drill unless retained.
 
-Kubernetes creates one restore target pod per drill and uses pod exec, copy, log,
+Kubernetes creates one restore target pod per drill and uses pod exec, copy,
 and delete APIs. Helm schedules the CLI as a CronJob and passes
 `--runtime=kubernetes`.
 
@@ -118,8 +117,8 @@ temporary file and rename. History entries are finalized without replacing
 existing files, so concurrent runs with the same timestamp keep separate
 entries.
 
-The `report` command builds HTML or JSON compliance reports from local history.
-The `reporting` config block can also write per-run JSON and compliance HTML
+The `report` command builds HTML or JSON evidence reports from local history.
+The `reporting` config block can also write per-run JSON and evidence HTML
 artifacts automatically after `restore-drill run`.
 
 ## Security model
