@@ -12,11 +12,15 @@ cd restore-drill
 make build
 make test-unit
 make lint
+make vuln
 ```
 
 Use `make verify` before opening a pull request when Helm and GoReleaser are
 installed locally. For provider or runtime changes, also run the relevant
 integration gate when Docker or kind is available.
+
+For first contributions, good issues are usually docs, examples, diagnostics,
+test coverage, or small edge cases that do not change public v1 contracts.
 
 ## Pull requests
 

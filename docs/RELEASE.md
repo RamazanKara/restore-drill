@@ -16,6 +16,8 @@ Install these tools before running the full local release gate:
 - Helm
 - GoReleaser
 - Syft, used by GoReleaser for SBOM generation
+- Cosign, used for keyless release signature verification and local signing checks
+- govulncheck, or network access for the `go run` fallback used by `make vuln`
 - kind and kubectl for Kubernetes smoke tests
 
 ## Local release gate
@@ -29,8 +31,12 @@ goreleaser release --snapshot --clean --skip=publish
 cd dist && sha256sum -c checksums.txt
 ```
 
-`make verify` runs build, vet, race-enabled unit tests, lint, example
-validation, Helm lint/template, and `goreleaser check`.
+`make verify` runs build, vet, race-enabled unit tests, lint, govulncheck with
+the reviewed Docker/Moby allowlist, example validation, Helm lint/template, and
+`goreleaser check`.
+
+GitHub Actions also runs scheduled security scans for CodeQL, OpenSSF
+Scorecard, and govulncheck.
 
 `make test-integration` runs real Docker restore fixtures for the supported
 provider matrix. `make test-k8s` runs the kind-backed Kubernetes smoke test.
@@ -58,6 +64,42 @@ The release workflow builds:
 - SBOMs
 - multi-architecture GHCR images
 - `latest` and versioned container tags
+- keyless Cosign signatures for GHCR images and `checksums.txt`
+- GitHub artifact attestations for release checksums
+
+## Verification
+
+Verify checksums after downloading release archives:
+
+```bash
+sha256sum -c checksums.txt
+```
+
+Verify the GHCR image signature:
+
+```bash
+cosign verify \
+  --certificate-identity-regexp 'https://github.com/RamazanKara/restore-drill/.github/workflows/release.yml@refs/tags/v.*' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  ghcr.io/ramazankara/restore-drill:<version>
+```
+
+Verify the checksum bundle:
+
+```bash
+cosign verify-blob \
+  --bundle checksums.txt.bundle \
+  --certificate-identity-regexp 'https://github.com/RamazanKara/restore-drill/.github/workflows/release.yml@refs/tags/v.*' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  checksums.txt
+```
+
+Pin production images by digest after verification:
+
+```bash
+docker pull ghcr.io/ramazankara/restore-drill:<version>
+docker inspect --format='{{index .RepoDigests 0}}' ghcr.io/ramazankara/restore-drill:<version>
+```
 
 ## Release hygiene
 
@@ -70,6 +112,8 @@ Before publishing a tag:
 - `CHANGELOG.md` has an entry for the release.
 - Provider claims in README and docs are backed by tests or marked as roadmap.
 - Release assets include checksums and SBOMs.
+- Release images and checksums are signed, and checksums have provenance
+  attestations.
 - No credentials, real backup data, generated binaries, or release artifacts are
   committed.
 

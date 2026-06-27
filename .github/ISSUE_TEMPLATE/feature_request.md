@@ -11,3 +11,9 @@ labels: enhancement
 ## Alternatives considered
 
 ## Operational constraints
+
+- runtime: docker / kubernetes / both
+- provider: postgres / mysql / redis / new provider
+- backup tool:
+- reporting or metrics consumers affected:
+- compatibility expectations:

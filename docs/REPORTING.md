@@ -56,6 +56,9 @@ durations like `720h`.
 The run JSON report is a top-level array of drill result objects. The v1 schema
 is intentionally stable for automation and audit pipelines.
 
+The machine-readable v1 schema is available at
+[docs/schemas/run-result-v1.schema.json](schemas/run-result-v1.schema.json).
+
 Fields currently emitted per drill:
 
 | Field | Meaning |

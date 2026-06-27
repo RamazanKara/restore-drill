@@ -33,6 +33,31 @@ jobs:
       - name: Validate examples
         run: make check-examples
 
+  vuln:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: govulncheck
+        run: make vuln
+
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v6
+      - name: Dependency review
+        uses: actions/dependency-review-action@v4
+
   lint:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -113,7 +138,7 @@ jobs:
   snapshot:
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    needs: [verify, lint, helm, kubernetes-smoke, docker-smoke, docker-integration]
+    needs: [verify, vuln, lint, helm, kubernetes-smoke, docker-smoke, docker-integration]
     steps:
       - uses: actions/checkout@v6
         with:

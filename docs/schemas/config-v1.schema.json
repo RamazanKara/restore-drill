@@ -1,0 +1,162 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/RamazanKara/restore-drill/docs/schemas/config-v1.schema.json",
+  "title": "restore-drill v1 configuration",
+  "type": "object",
+  "required": ["drills"],
+  "additionalProperties": false,
+  "properties": {
+    "drills": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/drill" }
+    },
+    "metrics": { "$ref": "#/$defs/metrics" },
+    "reporting": { "$ref": "#/$defs/reporting" }
+  },
+  "$defs": {
+    "drill": {
+      "type": "object",
+      "required": ["name", "provider", "backup", "restore", "checks"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "provider": { "type": "string", "enum": ["postgres", "mysql", "redis"] },
+        "schedule": { "type": "string" },
+        "backup": { "$ref": "#/$defs/backup" },
+        "restore": { "$ref": "#/$defs/restore" },
+        "checks": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/check" }
+        },
+        "alerts": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/alert" }
+        }
+      }
+    },
+    "backup": {
+      "type": "object",
+      "required": ["tool"],
+      "additionalProperties": false,
+      "properties": {
+        "tool": {
+          "type": "string",
+          "enum": ["pg_dump", "pg_restore", "pgbackrest", "wal-g", "walg", "mysqldump", "xtrabackup", "mariabackup", "rdb", "aof"]
+        },
+        "stanza": { "type": "string" },
+        "source": { "type": "string" },
+        "repo": { "$ref": "#/$defs/repo" }
+      },
+      "anyOf": [
+        { "required": ["source"] },
+        { "required": ["repo"] }
+      ]
+    },
+    "repo": {
+      "type": "object",
+      "required": ["type", "bucket", "prefix"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "enum": ["s3", "s3-compatible"] },
+        "bucket": { "type": "string", "minLength": 1 },
+        "endpoint": { "type": "string" },
+        "prefix": { "type": "string", "minLength": 1 },
+        "region": { "type": "string" }
+      }
+    },
+    "restore": {
+      "type": "object",
+      "required": ["container"],
+      "additionalProperties": false,
+      "properties": {
+        "target": { "type": "string" },
+        "timeout": { "type": "string" },
+        "container": { "$ref": "#/$defs/container" }
+      }
+    },
+    "container": {
+      "type": "object",
+      "required": ["image"],
+      "additionalProperties": false,
+      "properties": {
+        "image": { "type": "string", "minLength": 1 },
+        "env": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "resources": { "$ref": "#/$defs/resources" }
+      }
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "memory": { "type": "string" },
+        "cpu": { "type": "string" }
+      }
+    },
+    "check": {
+      "type": "object",
+      "required": ["name", "type", "expect"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "type": {
+          "type": "string",
+          "enum": ["query", "sql", "schema", "freshness", "key_count", "key_sample", "row_count", "extensions"]
+        },
+        "sql": { "type": "string" },
+        "keys": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "expect": { "type": "string", "minLength": 1 }
+      }
+    },
+    "alert": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "enum": ["webhook", "prometheus"] },
+        "endpoint": { "type": "string" },
+        "url": { "type": "string" },
+        "headers": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "prometheus": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "pushgateway": { "type": "string" },
+            "labels": {
+              "type": "object",
+              "additionalProperties": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "reporting": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "format": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["table", "json", "html"] }
+        },
+        "output": { "type": "string" },
+        "retention": { "type": "string" }
+      }
+    }
+  }
+}

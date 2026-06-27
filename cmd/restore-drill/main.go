@@ -9,6 +9,14 @@ import (
 )
 
 func main() {
+	root := newRootCmd()
+	if err := root.Execute(); err != nil {
+		fmt.Fprintln(root.ErrOrStderr(), err)
+		os.Exit(1)
+	}
+}
+
+func newRootCmd() *cobra.Command {
 	var verbose bool
 
 	root := &cobra.Command{
@@ -24,12 +32,10 @@ func main() {
 
 	root.AddCommand(runCmd())
 	root.AddCommand(validateCmd())
+	root.AddCommand(doctorCmd())
 	root.AddCommand(statusCmd())
 	root.AddCommand(reportCmd())
 	root.AddCommand(versionCmd())
 
-	if err := root.Execute(); err != nil {
-		fmt.Fprintln(root.ErrOrStderr(), err)
-		os.Exit(1)
-	}
+	return root
 }

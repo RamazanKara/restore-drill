@@ -129,6 +129,8 @@ tool:
 
 Archive restores also need archive utilities such as `tar`, `gzip`, and
 `xbstream` depending on the backup format.
+Local/S3 staging requires `tar` because backup artifacts are copied into restore
+target pods as tar streams.
 
 ## Network policy
 

@@ -3,6 +3,11 @@
 `restore-drill` reads YAML from `--config`. Environment interpolation happens
 before YAML parsing and supports `${VAR}` plus `${VAR:-default}`.
 
+The v1 machine-readable schema is available at
+[docs/schemas/config-v1.schema.json](schemas/config-v1.schema.json). The schema
+captures the documented wire shape; the Go validator remains the source of
+truth for provider/tool/check compatibility.
+
 If you want a runnable config before reading the whole reference, start with
 [examples/demo-redis-aof.yaml](../examples/demo-redis-aof.yaml). It restores a
 small Redis AOF fixture in Docker and exercises the same config shape used for
@@ -98,6 +103,10 @@ restore target before running the provider restore command.
 Archive-based physical backups also need archive tools in the restore image:
 `tar` for tar archives, `xbstream` for xbstream archives, and `gzip` for
 compressed dumps or compressed archive streams.
+
+Local file, local directory, and S3 object staging require `tar` in the restore
+target image because restore-drill streams staged backup data into the target as
+a tar archive.
 
 Preflight checks run before restore and fail with actionable messages when a
 required command is missing.

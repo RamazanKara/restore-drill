@@ -90,6 +90,14 @@ func New(opts ...Option) (*Runtime, error) {
 	return r, nil
 }
 
+// Ping verifies that the Kubernetes API is reachable with the configured namespace.
+func (r *Runtime) Ping(ctx context.Context) error {
+	if _, err := r.client.CoreV1().Pods(r.namespace).List(ctx, metav1.ListOptions{Limit: 1}); err != nil {
+		return fmt.Errorf("list pods in namespace %q: %w", r.namespace, err)
+	}
+	return nil
+}
+
 // pod wraps a Kubernetes pod as an engine.Container.
 type pod struct {
 	name      string

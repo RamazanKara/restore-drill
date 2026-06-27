@@ -20,6 +20,7 @@ After that, choose the page that matches what you are doing:
 | Roll out scheduled drills safely | [Production readiness](PRODUCTION.md) |
 | Wire restore drills into CI/CD | [CI/CD integration](ci-integration.md) |
 | Understand the internal model before changing code | [Architecture](ARCHITECTURE.md) |
+| Integrate with editors or audit tooling | [Schemas](schemas/) |
 
 ## Reference Pages
 
@@ -29,10 +30,13 @@ After that, choose the page that matches what you are doing:
   deprecations, and upgrade checks.
 - [Roadmap and release readiness](ROADMAP.md): current v1 scope, non-goals,
   maintenance priorities, and future candidates.
+- [Schemas](schemas/): JSON Schema contracts for v1 config and run JSON output.
 
 ## Project Documents
 
 - [Contributing](../CONTRIBUTING.md)
+- [Maintainers](../MAINTAINERS.md)
+- [Governance](../GOVERNANCE.md)
 - [Security policy](../SECURITY.md)
 - [Code of conduct](../CODE_OF_CONDUCT.md)
 - [Changelog](../CHANGELOG.md)

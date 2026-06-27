@@ -5,12 +5,15 @@ disaster-recovery readiness, or scheduled operational alerts.
 
 ## Rollout Path
 
-1. Run the local Redis demo to confirm the CLI and runtime work on your machine.
-2. Create one drill against a non-production backup and the exact restore image
+1. Run `restore-drill doctor --config drill.yaml --runtime docker` or
+   `--runtime kubernetes` to check config, runtime access, state/report paths,
+   and local release tooling.
+2. Run the local Redis demo to confirm the CLI and runtime work on your machine.
+3. Create one drill against a non-production backup and the exact restore image
    you expect to schedule.
-3. Add JSON/HTML reporting and verify the artifacts are stored durably.
-4. Add Pushgateway metrics and alert on failed validation plus stale success.
-5. Move the same config into CI or Helm, then keep the first few runs under
+4. Add JSON/HTML reporting and verify the artifacts are stored durably.
+5. Add Pushgateway metrics and alert on failed validation plus stale success.
+6. Move the same config into CI or Helm, then keep the first few runs under
    manual review.
 
 ## Deployment
@@ -44,6 +47,7 @@ Common examples:
 - Redis: `redis-server`, `redis-cli`
 
 Archive-based physical backups may also require `tar`, `gzip`, or `xbstream`.
+Local/S3 staging also requires `tar` in the restore target image.
 Preflight checks fail fast when required commands are missing.
 
 ## Secrets
@@ -113,4 +117,5 @@ goreleaser release --snapshot --clean --skip=publish
 ```
 
 The local release gate requires Go, Docker/Buildx, Helm, GoReleaser, Syft, kind,
-and kubectl.
+kubectl, Cosign, and govulncheck. `make vuln` allows only reviewed
+no-fixed-version Docker/Moby advisories listed in `.govulncheck.allowlist`.

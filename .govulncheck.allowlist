@@ -1,0 +1,10 @@
+# Allowlist format:
+# GO-ID|expires YYYY-MM-DD|reason
+#
+# Only no-fixed-version Docker/Moby advisories are allowed here. Fixable
+# standard-library and module vulnerabilities must fail make vuln.
+GO-2026-5746|2026-09-30|Docker/Moby no fixed module version reported by govulncheck; restore-drill avoids Docker archive upload and rechecks this before expiry.
+GO-2026-5668|2026-09-30|Docker/Moby no fixed module version reported by govulncheck; restore-drill avoids Docker archive upload and rechecks this before expiry.
+GO-2026-5617|2026-09-30|Docker/Moby no fixed module version reported by govulncheck; restore-drill avoids Docker archive upload and rechecks this before expiry.
+GO-2026-4887|2026-09-30|Docker/Moby no fixed module version reported by govulncheck; no fixed Docker client module is available.
+GO-2026-4883|2026-09-30|Docker/Moby no fixed module version reported by govulncheck; no fixed Docker client module is available.

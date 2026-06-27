@@ -9,6 +9,7 @@ permissions:
   contents: write
   packages: write
   id-token: write
+  attestations: write
 
 jobs:
   goreleaser:
@@ -40,6 +41,9 @@ jobs:
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           "$HOME/.local/bin/syft" version
 
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v4
+
       - name: GoReleaser check
         uses: goreleaser/goreleaser-action@v7
         with:
@@ -53,3 +57,26 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sign container images
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          image="ghcr.io/ramazankara/restore-drill"
+          cosign sign --yes "${image}:${version}"
+          cosign sign --yes "${image}:${version}-amd64"
+          cosign sign --yes "${image}:${version}-arm64"
+          cosign sign --yes "${image}:latest"
+
+      - name: Sign checksums
+        run: |
+          set -euo pipefail
+          cosign sign-blob --yes --bundle dist/checksums.txt.bundle dist/checksums.txt
+          gh release upload "$GITHUB_REF_NAME" dist/checksums.txt.bundle --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Attest release checksums
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: dist/checksums.txt

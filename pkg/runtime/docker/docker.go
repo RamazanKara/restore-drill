@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"strconv"
+	"strings"
 
 	"github.com/RamazanKara/restore-drill/pkg/engine"
 	cerrdefs "github.com/containerd/errdefs"
@@ -30,6 +31,14 @@ func New() (*Runtime, error) {
 		return nil, fmt.Errorf("docker: failed to create client: %w", err)
 	}
 	return &Runtime{client: cli}, nil
+}
+
+// Ping verifies that the Docker daemon is reachable.
+func (r *Runtime) Ping(ctx context.Context) error {
+	if _, err := r.client.Ping(ctx); err != nil {
+		return fmt.Errorf("docker: ping daemon: %w", err)
+	}
+	return nil
 }
 
 // dockerContainer implements engine.Container.
@@ -189,10 +198,80 @@ func (r *Runtime) Exec(ctx context.Context, c engine.Container, cmd []string) ([
 	return stdout.Bytes(), nil
 }
 
-// CopyTo copies data from a reader into the container filesystem.
+// CopyTo copies a tar stream into the container filesystem through exec.
+//
+// This intentionally avoids Docker's container archive upload API. The daemon
+// archive endpoint has had multiple no-fixed-version Moby advisories, and
+// restore-drill only needs a narrow "tar from stdin" copy path for its own
+// ephemeral targets.
 func (r *Runtime) CopyTo(ctx context.Context, c engine.Container, dest string, src io.Reader) error {
 	dc := c.(*dockerContainer)
-	return r.client.CopyToContainer(ctx, dc.id, dest, src, dockercontainer.CopyToContainerOptions{})
+
+	execConfig := dockercontainer.ExecOptions{
+		Cmd:          []string{"tar", "xf", "-", "-C", dest},
+		AttachStdin:  true,
+		AttachStdout: true,
+		AttachStderr: true,
+	}
+
+	execResp, err := r.client.ContainerExecCreate(ctx, dc.id, execConfig)
+	if err != nil {
+		return fmt.Errorf("docker: copy exec create: %w", err)
+	}
+
+	attachResp, err := r.client.ContainerExecAttach(ctx, execResp.ID, dockercontainer.ExecAttachOptions{})
+	if err != nil {
+		return fmt.Errorf("docker: copy exec attach: %w", err)
+	}
+	defer attachResp.Close()
+
+	var stdout, stderr bytes.Buffer
+	readErrCh := make(chan error, 1)
+	go func() {
+		_, err := stdcopy.StdCopy(&stdout, &stderr, attachResp.Reader)
+		readErrCh <- err
+	}()
+
+	copyErr := copyAndCloseWrite(attachResp.Conn, src)
+	readErr := <-readErrCh
+	if copyErr != nil {
+		return fmt.Errorf("docker: copy stream to target: %w", copyErr)
+	}
+	if readErr != nil {
+		return fmt.Errorf("docker: copy read output: %w", readErr)
+	}
+
+	inspectResp, err := r.client.ContainerExecInspect(ctx, execResp.ID)
+	if err != nil {
+		return fmt.Errorf("docker: copy exec inspect: %w", err)
+	}
+	if inspectResp.ExitCode != 0 {
+		return fmt.Errorf("docker: copy exited with code %d: %s", inspectResp.ExitCode, strings.TrimSpace(stderr.String()))
+	}
+	return nil
+}
+
+type closeWriter interface {
+	CloseWrite() error
+}
+
+func copyAndCloseWrite(w io.Writer, src io.Reader) error {
+	_, copyErr := io.Copy(w, src)
+	closeErr := closeWrite(w)
+	if copyErr != nil {
+		return copyErr
+	}
+	return closeErr
+}
+
+func closeWrite(w io.Writer) error {
+	if cw, ok := w.(closeWriter); ok {
+		return cw.CloseWrite()
+	}
+	if closer, ok := w.(io.Closer); ok {
+		return closer.Close()
+	}
+	return nil
 }
 
 // Destroy stops and removes the container.

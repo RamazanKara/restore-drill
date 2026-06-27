@@ -2,8 +2,9 @@ apiVersion: v2
 name: restore-drill
 description: Automated backup verification for self-hosted infrastructure
 type: application
-version: 1.0.1
-appVersion: "1.0.1"
+version: 1.2.0
+appVersion: "1.2.0"
+icon: https://raw.githubusercontent.com/RamazanKara/restore-drill/main/docs/assets/restore-drill-demo.gif
 keywords:
   - backup
   - restore

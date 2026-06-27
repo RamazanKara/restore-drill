@@ -111,7 +111,8 @@ func repoFromS3URI(uri string) (engine.RepoConfig, error) {
 }
 
 func ensureStageDir(ctx context.Context, rt engine.Runtime, target engine.Container) error {
-	if _, err := rt.Exec(ctx, target, []string{"sh", "-c", "mkdir -p " + stageDir + " && chmod 0777 " + stageDir}); err != nil {
+	script := "command -v tar >/dev/null 2>&1 || { echo 'restore-drill staging requires tar in the restore target image' >&2; exit 127; }; mkdir -p " + stageDir + " && chmod 0777 " + stageDir
+	if _, err := rt.Exec(ctx, target, []string{"sh", "-c", script}); err != nil {
 		return fmt.Errorf("create target staging directory: %w", err)
 	}
 	return nil

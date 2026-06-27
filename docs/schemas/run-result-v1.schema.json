@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/RamazanKara/restore-drill/docs/schemas/run-result-v1.schema.json",
+  "title": "restore-drill v1 run JSON result",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": [
+      "name",
+      "provider",
+      "status",
+      "started_at",
+      "duration",
+      "duration_ms",
+      "validation_passed",
+      "checks"
+    ],
+    "additionalProperties": false,
+    "properties": {
+      "name": { "type": "string", "minLength": 1 },
+      "provider": { "type": "string", "enum": ["postgres", "mysql", "redis"] },
+      "status": { "type": "string", "enum": ["pass", "fail"] },
+      "started_at": { "type": "string", "format": "date-time" },
+      "duration": { "type": "string" },
+      "duration_ms": { "type": "integer", "minimum": 0 },
+      "backup_timestamp": { "type": "string", "format": "date-time" },
+      "backup_age": { "type": "string" },
+      "validation_passed": { "type": "boolean" },
+      "error": { "type": "string" },
+      "cleanup_skipped": { "type": "boolean" },
+      "target_id": { "type": "string" },
+      "target_host": { "type": "string" },
+      "target_ports": {
+        "type": "object",
+        "additionalProperties": { "type": "integer", "minimum": 1, "maximum": 65535 }
+      },
+      "checks": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": ["name", "type", "expected", "actual", "passed", "duration"],
+          "additionalProperties": false,
+          "properties": {
+            "name": { "type": "string", "minLength": 1 },
+            "type": { "type": "string" },
+            "expected": { "type": "string" },
+            "actual": { "type": "string" },
+            "passed": { "type": "boolean" },
+            "duration": { "type": "string" },
+            "error": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

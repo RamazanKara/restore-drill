@@ -7,6 +7,27 @@ versioning.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-06-27
+
+### Added
+
+- Added `restore-drill doctor` for config, runtime, state/report path, release
+  tooling, and vulnerability-scan readiness checks.
+- Added v1 JSON schemas for drill configuration and run JSON output, with tests
+  against examples and generated reporter output.
+- Added govulncheck CI gating, a reviewed Docker/Moby vulnerability allowlist,
+  CodeQL, OpenSSF Scorecard, dependency review, Dependabot, Cosign release
+  signing, and checksum provenance attestation workflow coverage.
+- Added maintainer and governance documentation plus richer issue and pull
+  request templates.
+
+### Changed
+
+- Updated the Go toolchain line to `go1.25.11` and updated vulnerable
+  `golang.org/x/*` modules.
+- Changed Docker backup staging to stream tar data through exec instead of the
+  Docker archive upload API.
+
 ## [1.1.0] - 2026-06-24
 
 ### Changed

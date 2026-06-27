@@ -44,8 +44,8 @@ inventory infrastructure, or replace observability platforms.
 | Kubernetes | Helm CronJob, namespace-scoped RBAC, restore pod labels/annotations, image pull secrets, resources, NetworkPolicy |
 
 Provider restore images must include the database runtime, client tools, and the
-selected backup tool. Preflight checks fail early when required commands are
-missing.
+selected backup tool. Local/S3 staging also requires `tar` in the restore target
+image. Preflight checks fail early when required commands are missing.
 
 Future candidates are tracked in [docs/ROADMAP.md](docs/ROADMAP.md). Cost
 estimation is a non-goal.
@@ -62,6 +62,16 @@ Release binaries and container images are published from tags:
 docker pull ghcr.io/ramazankara/restore-drill:latest
 ```
 
+Release images and checksum artifacts are signed with keyless Sigstore/Cosign
+from GitHub Actions. After installing `cosign`, verify the container image:
+
+```bash
+cosign verify \
+  --certificate-identity-regexp 'https://github.com/RamazanKara/restore-drill/.github/workflows/release.yml@refs/tags/v.*' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  ghcr.io/ramazankara/restore-drill:latest
+```
+
 ## Quick start
 
 Run the self-contained Redis demo from a clone:
@@ -74,6 +84,7 @@ make build
 Then validate and run your own drill config:
 
 ```bash
+restore-drill doctor --config examples/demo-redis-aof.yaml --runtime docker
 restore-drill validate --config examples/drill.yaml
 restore-drill run --config drill.yaml --runtime docker
 restore-drill run --config drill.yaml --runtime docker --parallel --format json
@@ -161,6 +172,17 @@ ConfigMap-backed drill configuration with Secret-driven environment variables.
 - [docs/RELEASE.md](docs/RELEASE.md): release process
 - [docs/SUPPORT.md](docs/SUPPORT.md): support, upgrade, and deprecation policy
 - [docs/ROADMAP.md](docs/ROADMAP.md): stable scope, non-goals, and roadmap candidates
+- [docs/schemas/config-v1.schema.json](docs/schemas/config-v1.schema.json): v1 config schema
+- [docs/schemas/run-result-v1.schema.json](docs/schemas/run-result-v1.schema.json): v1 run JSON schema
+
+## Production readiness in 10 minutes
+
+1. Run `restore-drill doctor --config drill.yaml --runtime docker` or
+   `--runtime kubernetes`.
+2. Run `restore-drill validate --config drill.yaml`.
+3. Execute one manual drill with the exact restore target image.
+4. Enable `reporting.format: [json, html]` with durable `reporting.output`.
+5. Enable Pushgateway metrics and alert on failed validation plus stale success.
 
 ## Development
 
@@ -168,6 +190,7 @@ ConfigMap-backed drill configuration with Secret-driven environment variables.
 make build
 make test-unit
 make lint
+make vuln
 make check-examples
 ```
 

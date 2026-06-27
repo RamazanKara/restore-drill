@@ -8,7 +8,7 @@ LDFLAGS := -s -w \
 	-X $(MODULE)/internal/version.Commit=$(COMMIT) \
 	-X $(MODULE)/internal/version.Date=$(DATE)
 
-.PHONY: build test test-unit test-integration test-k8s vet lint fmt clean release snapshot docker docker-smoke verify helm-lint goreleaser-check check-examples
+.PHONY: build test test-unit test-integration test-k8s vet lint vuln fmt clean release snapshot docker docker-smoke verify helm-lint goreleaser-check check-examples
 
 build:
 	go build -ldflags "$(LDFLAGS)" -o bin/$(BINARY) ./cmd/restore-drill
@@ -30,6 +30,9 @@ vet:
 lint:
 	golangci-lint run ./...
 
+vuln:
+	bash ./scripts/govulncheck.sh
+
 fmt:
 	gofumpt -w .
 	goimports -w .
@@ -45,7 +48,7 @@ helm-lint:
 goreleaser-check:
 	goreleaser check
 
-verify: build vet test-unit lint check-examples helm-lint goreleaser-check
+verify: build vet test-unit lint vuln check-examples helm-lint goreleaser-check
 
 clean:
 	rm -rf bin/ dist/
