@@ -5,7 +5,7 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 go build -ldflags "-s -w" -o /restore-drill ./cmd/restore-drill
 
-FROM alpine:3.21
+FROM alpine:3.24
 RUN apk add --no-cache ca-certificates tzdata
 COPY --from=builder /restore-drill /usr/local/bin/restore-drill
 USER 65534:65534
