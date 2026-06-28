@@ -4,3 +4,5 @@ reports/
 *.env
 .DS_Store
 plan/
+coverage.out
+coverage.html

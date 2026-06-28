@@ -8,7 +8,7 @@ LDFLAGS := -s -w \
 	-X $(MODULE)/internal/version.Commit=$(COMMIT) \
 	-X $(MODULE)/internal/version.Date=$(DATE)
 
-.PHONY: build test test-unit test-integration test-k8s vet lint vuln fmt clean release snapshot docker docker-smoke verify helm-lint goreleaser-check check-examples
+.PHONY: build test test-unit test-integration test-k8s vet lint vuln fmt clean release snapshot docker docker-smoke verify helm-lint goreleaser-check check-examples cover
 
 build:
 	go build -ldflags "$(LDFLAGS)" -o bin/$(BINARY) ./cmd/restore-drill
@@ -17,6 +17,11 @@ test: test-unit
 
 test-unit:
 	go test -race -count=1 ./...
+
+cover:
+	go test -race -count=1 -covermode=atomic -coverprofile=coverage.out ./...
+	go tool cover -func=coverage.out | tail -1
+	go tool cover -html=coverage.out -o coverage.html
 
 test-integration:
 	RESTORE_DRILL_INTEGRATION=1 go test -race -count=1 -timeout=20m ./test/integration/...

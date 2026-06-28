@@ -27,8 +27,18 @@ jobs:
       - name: Vet
         run: make vet
 
-      - name: Unit tests
-        run: make test-unit
+      - name: Unit tests with coverage
+        run: make cover
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: |
+            coverage.out
+            coverage.html
+          if-no-files-found: error
 
       - name: Validate examples
         run: make check-examples

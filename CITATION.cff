@@ -1,0 +1,29 @@
+cff-version: 1.2.0
+message: "If you use restore-drill in your work, please cite it using this metadata."
+title: restore-drill
+abstract: >-
+  Automated backup restore verification for self-hosted infrastructure.
+  restore-drill restores real backup artifacts into disposable Docker containers
+  or Kubernetes pods, validates the restored data, records RTO/RPO evidence, and
+  publishes machine-readable results for audits and alerts.
+type: software
+authors:
+  - family-names: Kara
+    given-names: Ramazan
+    alias: RamazanKara
+repository-code: "https://github.com/RamazanKara/restore-drill"
+url: "https://github.com/RamazanKara/restore-drill"
+license: Apache-2.0
+version: 1.2.1
+date-released: "2026-06-28"
+keywords:
+  - backup
+  - restore
+  - disaster-recovery
+  - postgresql
+  - mysql
+  - mariadb
+  - redis
+  - kubernetes
+  - docker
+  - observability

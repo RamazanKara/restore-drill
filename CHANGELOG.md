@@ -7,6 +7,18 @@ versioning.
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-06-28
+
+### Added
+
+- Added unit tests for the version, logging, and target-command helper packages
+  (previously untested) plus the report-rendering, webhook-alert, and writable
+  directory helpers, raising overall statement coverage.
+- Added a `make cover` target that writes `coverage.out` and `coverage.html`,
+  and uploaded the coverage report as a CI artifact on every run.
+- Added `CITATION.cff` so the project can be cited with structured metadata, and
+  a `FUNDING.yml` sponsor configuration.
+
 ## [1.2.0] - 2026-06-27
 
 ### Added
