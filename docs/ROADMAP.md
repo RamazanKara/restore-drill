@@ -33,10 +33,10 @@ It intentionally does not:
 - Canonical module: `github.com/RamazanKara/restore-drill`
 - License: Apache-2.0
 - Container image: `ghcr.io/ramazankara/restore-drill`
-- Supported providers: PostgreSQL, MySQL/MariaDB, Redis
+- Supported providers: PostgreSQL, MySQL/MariaDB, Redis, etcd
 - Supported runtimes: Docker and Kubernetes
 - Supported outputs: stdout table, run JSON, HTML evidence report, webhook,
-  local history, Prometheus Pushgateway
+  Slack/Mattermost alerts, local history, Prometheus Pushgateway
 
 The public contracts that must remain compatible within v1 are documented in
 [SUPPORT.md](SUPPORT.md) and [REPORTING.md](REPORTING.md).
@@ -104,8 +104,8 @@ checks.
 These are future candidates, not current GA claims:
 
 - standalone object-store restore drills
-- etcd snapshot restore drills
 - ClickHouse and MongoDB providers
 - Velero restore validation
 - PITR fuzzing
 - multi-region restore drills
+- additional chat/alert destinations (PagerDuty, Microsoft Teams, Discord)

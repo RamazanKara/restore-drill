@@ -70,6 +70,39 @@ func TestBuildReporterPassesWebhookHeaders(t *testing.T) {
 	}
 }
 
+func TestBuildReporterWiresSlackOnFailure(t *testing.T) {
+	cfg := &engine.Config{
+		Drills: []engine.DrillConfig{
+			{
+				Name: "etcd-prod",
+				Alerts: []engine.AlertSpec{
+					{Type: "slack", URL: "https://hooks.slack.com/services/x", On: "failure"},
+				},
+			},
+		},
+	}
+
+	rep := buildReporter("table", cfg, io.Discard)
+	multi, ok := rep.(*reporter.Multi)
+	if !ok {
+		t.Fatalf("expected multi reporter, got %T", rep)
+	}
+	if len(multi.Reporters) != 2 {
+		t.Fatalf("expected stdout and slack reporters, got %d", len(multi.Reporters))
+	}
+
+	cond, ok := multi.Reporters[1].(*reporter.Conditional)
+	if !ok {
+		t.Fatalf("expected conditional reporter for on:failure, got %T", multi.Reporters[1])
+	}
+	if !cond.OnlyOnFailure {
+		t.Fatal("expected conditional reporter to be gated on failure")
+	}
+	if _, ok := cond.Inner.(*reporter.Slack); !ok {
+		t.Fatalf("expected slack reporter inside conditional, got %T", cond.Inner)
+	}
+}
+
 func TestBuildReporterIgnoresDeprecatedPrometheusAlerts(t *testing.T) {
 	cfg := &engine.Config{
 		Drills: []engine.DrillConfig{

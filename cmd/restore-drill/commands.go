@@ -11,6 +11,7 @@ import (
 	"github.com/RamazanKara/restore-drill/internal/version"
 	"github.com/RamazanKara/restore-drill/pkg/engine"
 	"github.com/RamazanKara/restore-drill/pkg/metrics"
+	"github.com/RamazanKara/restore-drill/pkg/providers/etcd"
 	"github.com/RamazanKara/restore-drill/pkg/providers/mysql"
 	"github.com/RamazanKara/restore-drill/pkg/providers/postgres"
 	"github.com/RamazanKara/restore-drill/pkg/providers/redis"
@@ -78,6 +79,7 @@ func runCmd() *cobra.Command {
 			eng.RegisterProvider(postgres.New())
 			eng.RegisterProvider(mysql.New())
 			eng.RegisterProvider(redis.New())
+			eng.RegisterProvider(etcd.New())
 
 			var results []engine.DrillResult
 			if parallel {

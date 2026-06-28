@@ -52,7 +52,7 @@ drills:
     alerts: []
 ```
 
-Supported providers are `postgres`, `mysql`, and `redis`.
+Supported providers are `postgres`, `mysql`, `redis`, and `etcd`.
 
 `schedule` is informational in CLI configs. Scheduling is handled by CI, cron,
 or the Helm CronJob.
@@ -99,6 +99,7 @@ restore target before running the provider restore command.
 | PostgreSQL | `pg_dump`, `pg_restore`, `pgbackrest`, `wal-g`, `walg` | `psql`, `pg_isready`, selected backup tool, `pg_ctl` for physical/PITR flows |
 | MySQL/MariaDB | `mysqldump`, `xtrabackup`, `mariabackup` | `mysql` or `mariadb`, `mysqladmin` or `mariadb-admin`, selected backup tool |
 | Redis | `rdb`, `aof` | `redis-server`, `redis-cli` |
+| etcd | `snapshot` | `etcd`, `etcdctl` |
 
 Archive-based physical backups also need archive tools in the restore image:
 `tar` for tar archives, `xbstream` for xbstream archives, and `gzip` for
@@ -155,9 +156,19 @@ Supported check types:
 | PostgreSQL | `query`, `sql`, `row_count`, `schema`, `freshness`, `extensions` |
 | MySQL/MariaDB | `query`, `sql`, `row_count`, `schema`, `freshness` |
 | Redis | `key_count`, `key_sample`, `query` |
+| etcd | `key_count`, `key_get`, `query` |
 
 For Redis `query`, the `sql` field is reused as a `redis-cli` command string,
 for example `sql: "PING"`.
+
+For etcd checks:
+
+- `key_count` counts keys under the `key` prefix, or the whole keyspace when
+  `key` is omitted: `type: key_count`, `key: /registry/`, `expect: "> 0"`.
+- `key_get` returns a single key's value for `contains`/exact/numeric
+  expectations: `type: key_get`, `key: /registry/namespaces/default`.
+- `query` reuses the `sql` field as `etcdctl` arguments, for example
+  `sql: "endpoint health"` with `expect: 'contains "is healthy"'`.
 
 Supported expectations:
 
@@ -176,17 +187,31 @@ alerts:
     url: ${RESTORE_DRILL_WEBHOOK_URL}
     headers:
       Authorization: "Bearer ${RESTORE_DRILL_WEBHOOK_TOKEN}"
+  - type: slack
+    url: ${RESTORE_DRILL_SLACK_WEBHOOK_URL}
+    on: failure
 ```
+
+Supported alert types are `webhook` and `slack`.
 
 Webhook alerts send a JSON object with a summary and the same result shape as
 run JSON output. `url` and `endpoint` are both accepted for webhooks; prefer
 `url`.
 
-Webhook `headers` are copied to the request and support environment
+Slack alerts post a formatted summary message to a Slack-compatible incoming
+webhook (Slack and Mattermost both accept the `{"text": ...}` payload). Point
+`url` at the incoming-webhook URL. The webhook JSON payload shape is rejected by
+Slack, so use the `slack` type rather than a `webhook` alert for chat channels.
+
+`on` controls when an alert fires: `always` (the default) sends on every run,
+and `failure` sends only when at least one drill errored or failed validation.
+`on` applies to both `webhook` and `slack` alerts.
+
+Alert `headers` are copied to the request and support environment
 interpolation. Keep tokens in the runtime environment, not in committed config.
 Use a required variable such as `${RESTORE_DRILL_WEBHOOK_URL}` when a missing
-destination should fail config validation. Omit the webhook alert in
-environments that should not send webhooks.
+destination should fail config validation. Omit the alert in environments that
+should not send notifications.
 
 Prometheus Pushgateway is configured globally under `metrics.prometheus`.
 Per-drill `prometheus` alert entries are still accepted for compatibility with

@@ -21,7 +21,7 @@
       "additionalProperties": false,
       "properties": {
         "name": { "type": "string", "minLength": 1 },
-        "provider": { "type": "string", "enum": ["postgres", "mysql", "redis"] },
+        "provider": { "type": "string", "enum": ["postgres", "mysql", "redis", "etcd"] },
         "schedule": { "type": "string" },
         "backup": { "$ref": "#/$defs/backup" },
         "restore": { "$ref": "#/$defs/restore" },
@@ -42,7 +42,7 @@
       "properties": {
         "tool": {
           "type": "string",
-          "enum": ["pg_dump", "pg_restore", "pgbackrest", "wal-g", "walg", "mysqldump", "xtrabackup", "mariabackup", "rdb", "aof"]
+          "enum": ["pg_dump", "pg_restore", "pgbackrest", "wal-g", "walg", "mysqldump", "xtrabackup", "mariabackup", "rdb", "aof", "snapshot"]
         },
         "stanza": { "type": "string" },
         "source": { "type": "string" },
@@ -104,9 +104,10 @@
         "name": { "type": "string", "minLength": 1 },
         "type": {
           "type": "string",
-          "enum": ["query", "sql", "schema", "freshness", "key_count", "key_sample", "row_count", "extensions"]
+          "enum": ["query", "sql", "schema", "freshness", "key_count", "key_sample", "key_get", "row_count", "extensions"]
         },
         "sql": { "type": "string" },
+        "key": { "type": "string" },
         "keys": {
           "type": "array",
           "items": { "type": "string" }
@@ -119,9 +120,10 @@
       "required": ["type"],
       "additionalProperties": false,
       "properties": {
-        "type": { "type": "string", "enum": ["webhook", "prometheus"] },
+        "type": { "type": "string", "enum": ["webhook", "slack", "prometheus"] },
         "endpoint": { "type": "string" },
         "url": { "type": "string" },
+        "on": { "type": "string", "enum": ["always", "failure"] },
         "headers": {
           "type": "object",
           "additionalProperties": { "type": "string" }

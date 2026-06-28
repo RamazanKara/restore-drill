@@ -147,6 +147,9 @@ func (e *Engine) executeDrill(ctx context.Context, drill DrillConfig) (result Dr
 	if drill.Provider == "postgres" && (drill.Backup.Tool == "pgbackrest" || drill.Backup.Tool == "wal-g" || drill.Backup.Tool == "walg") {
 		spec.Cmd = []string{"sh", "-c", "sleep infinity"}
 	}
+	if drill.Provider == "etcd" {
+		spec.Cmd = []string{"sh", "-c", "sleep infinity"}
+	}
 	if drill.Restore.Container.Resources.Memory != "" {
 		spec.MemoryLimit = parseMemory(drill.Restore.Container.Resources.Memory)
 	}

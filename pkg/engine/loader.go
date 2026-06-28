@@ -31,6 +31,9 @@ var supportedBackupTools = map[string]map[string]struct{}{
 		"rdb": {},
 		"aof": {},
 	},
+	"etcd": {
+		"snapshot": {},
+	},
 }
 
 var supportedRepoTypes = map[string]struct{}{
@@ -45,6 +48,7 @@ var supportedCheckTypes = map[string]struct{}{
 	"freshness":  {},
 	"key_count":  {},
 	"key_sample": {},
+	"key_get":    {},
 	"row_count":  {},
 	"extensions": {},
 }
@@ -70,6 +74,16 @@ var supportedCheckTypesByProvider = map[string]map[string]struct{}{
 		"key_count":  {},
 		"key_sample": {},
 	},
+	"etcd": {
+		"query":     {},
+		"key_count": {},
+		"key_get":   {},
+	},
+}
+
+// keyBackedCheckTypes require a single key or prefix in the check's key field.
+var keyBackedCheckTypes = map[string]struct{}{
+	"key_get": {},
 }
 
 var sqlBackedCheckTypes = map[string]struct{}{
@@ -82,7 +96,15 @@ var sqlBackedCheckTypes = map[string]struct{}{
 
 var supportedAlertTypes = map[string]struct{}{
 	"webhook":    {},
+	"slack":      {},
 	"prometheus": {},
+}
+
+// supportedAlertConditions gate when an alert fires. Empty means "always".
+var supportedAlertConditions = map[string]struct{}{
+	"":        {},
+	"always":  {},
+	"failure": {},
 }
 
 var supportedReportFormats = map[string]struct{}{
@@ -235,6 +257,10 @@ func validateChecks(drillName, provider string, checks []Check) error {
 			return fmt.Errorf("config: drill %q check %q of type 'key_sample' must have keys", drillName, check.Name)
 		}
 
+		if _, ok := keyBackedCheckTypes[check.Type]; ok && check.Key == "" {
+			return fmt.Errorf("config: drill %q check %q of type %q must have key", drillName, check.Name, check.Type)
+		}
+
 		if check.Expect == "" {
 			return fmt.Errorf("config: drill %q check %q must have an expect expression", drillName, check.Name)
 		}
@@ -250,10 +276,13 @@ func validateAlerts(drillName string, alerts []AlertSpec) error {
 		if _, ok := supportedAlertTypes[alert.Type]; !ok {
 			return fmt.Errorf("config: drill %q alert[%d] has unsupported type %q", drillName, i, alert.Type)
 		}
+		if _, ok := supportedAlertConditions[alert.On]; !ok {
+			return fmt.Errorf("config: drill %q alert[%d] has unsupported on %q (use always or failure)", drillName, i, alert.On)
+		}
 		switch alert.Type {
-		case "webhook":
+		case "webhook", "slack":
 			if alert.URL == "" && alert.Endpoint == "" {
-				return fmt.Errorf("config: drill %q webhook alert[%d] must specify url or endpoint", drillName, i)
+				return fmt.Errorf("config: drill %q %s alert[%d] must specify url or endpoint", drillName, alert.Type, i)
 			}
 		}
 		for key := range alert.Headers {
@@ -323,6 +352,8 @@ func GetDefaultPorts(provider string) []int {
 		return []int{3306}
 	case "redis":
 		return []int{6379}
+	case "etcd":
+		return []int{2379}
 	default:
 		return nil
 	}

@@ -1,0 +1,50 @@
+# Example: etcd snapshot restore verification
+#
+# The restore image must contain the etcd server, etcdctl, a POSIX shell, and
+# tar (tar is required to stage local/S3 backup artifacts). An image built from
+# the official etcd release binaries on top of Alpine satisfies all four.
+drills:
+  - name: production-etcd
+    provider: etcd
+    schedule: "0 5 * * *"
+    backup:
+      tool: snapshot
+      source: /backups/etcd/snapshot.db
+    restore:
+      container:
+        image: example/etcd-restore:3.5
+        resources:
+          memory: 1Gi
+          cpu: "1"
+      timeout: 10m
+    checks:
+      # Prove the Kubernetes registry keyspace restored with namespaces present.
+      - name: namespaces-present
+        type: key_count
+        key: /registry/namespaces/
+        expect: "> 0"
+      - name: default-namespace
+        type: key_get
+        key: /registry/namespaces/default
+        expect: 'contains "Namespace"'
+      # Total keyspace size, useful as a coarse "the snapshot is not empty" gate.
+      - name: keyspace-not-empty
+        type: key_count
+        expect: "> 100"
+      - name: cluster-healthy
+        type: query
+        sql: "endpoint health"
+        expect: 'contains "is healthy"'
+    alerts:
+      # Slack/Mattermost incoming webhook. on: failure only pages when a restore
+      # or validation check fails; omit `on` (or set always) to post every run.
+      - type: slack
+        url: ${RESTORE_DRILL_SLACK_WEBHOOK_URL:-https://hooks.slack.com/services/replace-me}
+        on: failure
+metrics:
+  prometheus:
+    enabled: true
+    pushgateway: http://pushgateway:9091
+    labels:
+      environment: production
+      component: etcd

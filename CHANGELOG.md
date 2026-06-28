@@ -7,6 +7,24 @@ versioning.
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-06-28
+
+### Added
+
+- Added an `etcd` provider that restores `etcdctl snapshot` backups into a
+  disposable target, starts etcd against the restored data directory, and
+  validates the keyspace. New `key_count` (prefix or whole keyspace), `key_get`,
+  and `query` checks back etcd validation, with a new `key` check field and a
+  Docker integration test that generates and restores a real snapshot.
+- Added a `slack` alert type that posts a formatted pass/fail summary to
+  Slack-compatible incoming webhooks (Slack and Mattermost).
+- Added an `on` condition (`always` default, or `failure`) to `webhook` and
+  `slack` alerts so drills can notify only when a restore or validation fails.
+
+### Changed
+
+- Consolidated webhook and Slack delivery onto a shared HTTP retry helper.
+
 ## [1.2.1] - 2026-06-28
 
 ### Added

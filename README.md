@@ -36,11 +36,12 @@ inventory infrastructure, or replace observability platforms.
 
 | Area | Supported surface |
 | --- | --- |
-| Providers | PostgreSQL, MySQL/MariaDB, Redis |
-| Backup tools | `pg_dump`, `pg_restore`, `pgbackrest`, `wal-g`/`walg`, `mysqldump`, `xtrabackup`, `mariabackup`, Redis RDB, Redis AOF |
+| Providers | PostgreSQL, MySQL/MariaDB, Redis, etcd |
+| Backup tools | `pg_dump`, `pg_restore`, `pgbackrest`, `wal-g`/`walg`, `mysqldump`, `xtrabackup`, `mariabackup`, Redis RDB, Redis AOF, etcd snapshot |
 | Backup sources | Local files/directories, mounted target paths, S3-compatible objects and prefixes |
 | Runtimes | Docker and Kubernetes |
-| Outputs | stdout table, run JSON, HTML evidence reports, webhooks, local history, Prometheus Pushgateway |
+| Outputs | stdout table, run JSON, HTML evidence reports, webhooks, Slack/Mattermost alerts, local history, Prometheus Pushgateway |
+| Alert filtering | `on: always` (default) or `on: failure` per alert |
 | Kubernetes | Helm CronJob, namespace-scoped RBAC, restore pod labels/annotations, image pull secrets, resources, NetworkPolicy |
 
 Provider restore images must include the database runtime, client tools, and the

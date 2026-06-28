@@ -54,6 +54,7 @@ type Check struct {
 	Type   string   `yaml:"type"`
 	Name   string   `yaml:"name"`
 	SQL    string   `yaml:"sql,omitempty"`
+	Key    string   `yaml:"key,omitempty"`
 	Keys   []string `yaml:"keys,omitempty"`
 	Expect string   `yaml:"expect"`
 }
@@ -63,6 +64,7 @@ type AlertSpec struct {
 	Type     string            `yaml:"type"`
 	Endpoint string            `yaml:"endpoint,omitempty"`
 	URL      string            `yaml:"url,omitempty"`
+	On       string            `yaml:"on,omitempty"`
 	Headers  map[string]string `yaml:"headers,omitempty"`
 }
 

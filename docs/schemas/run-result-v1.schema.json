@@ -18,7 +18,7 @@
     "additionalProperties": false,
     "properties": {
       "name": { "type": "string", "minLength": 1 },
-      "provider": { "type": "string", "enum": ["postgres", "mysql", "redis"] },
+      "provider": { "type": "string", "enum": ["postgres", "mysql", "redis", "etcd"] },
       "status": { "type": "string", "enum": ["pass", "fail"] },
       "started_at": { "type": "string", "format": "date-time" },
       "duration": { "type": "string" },

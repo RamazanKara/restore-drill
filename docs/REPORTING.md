@@ -15,7 +15,8 @@ truth:
 | Human operator watching a manual drill | stdout table |
 | CI gate or audit pipeline | run JSON |
 | Periodic review by humans | HTML evidence report |
-| Paging or chat notification | webhook |
+| Machine-to-machine notification | webhook |
+| Slack/Mattermost channel | slack alert |
 | SLO/RPO alerting | Pushgateway metrics |
 
 ## Configured report files
@@ -124,6 +125,37 @@ The webhook body is a JSON object with `timestamp`, `summary`, and `results`.
 `results` uses the same drill result shape as the run JSON report.
 restore-drill retries transport errors and HTTP 5xx responses, but it does not
 retry HTTP 4xx responses.
+
+## Slack
+
+Slack alerts post a formatted summary to a Slack-compatible incoming webhook.
+Slack and Mattermost both accept the `{"text": ...}` payload that restore-drill
+sends, so use the `slack` alert type for chat channels rather than a `webhook`
+alert (whose JSON shape Slack rejects):
+
+```yaml
+alerts:
+  - type: slack
+    url: ${RESTORE_DRILL_SLACK_WEBHOOK_URL}
+    on: failure
+```
+
+The message has a status header (`all N drill(s) passed` or `M of N drill(s)
+failed`) and one line per drill, including a concise failure reason for failed
+drills. Slack alerts use the same retry behavior as webhooks.
+
+## Alert conditions
+
+Both `webhook` and `slack` alerts accept an `on` field that controls when they
+fire:
+
+| `on` | Behavior |
+| --- | --- |
+| `always` (default) | Send on every run, pass or fail |
+| `failure` | Send only when a drill errored or failed validation |
+
+Use `on: failure` for paging channels that should stay quiet on success, and
+`always` for an audit trail of every run.
 
 ## Prometheus
 

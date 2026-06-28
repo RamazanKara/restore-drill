@@ -25,22 +25,35 @@ func buildReporter(format string, cfg *engine.Config, out io.Writer) engine.Repo
 		reporters = append(reporters, &reporter.Stdout{Writer: out})
 	}
 
-	seenWebhook := make(map[string]struct{})
+	seen := make(map[string]struct{})
 	for _, drill := range cfg.Drills {
 		for _, alert := range drill.Alerts {
-			if alert.Type != "webhook" {
-				continue
-			}
 			url := webhookAlertURL(alert)
 			if url == "" {
 				continue
 			}
-			key := webhookAlertKey(url, alert.Headers)
-			if _, ok := seenWebhook[key]; ok {
+
+			var base engine.Reporter
+			switch alert.Type {
+			case "webhook":
+				base = reporter.NewWebhook(url, alert.Headers)
+			case "slack":
+				base = reporter.NewSlack(url, alert.Headers)
+			default:
 				continue
 			}
-			seenWebhook[key] = struct{}{}
-			reporters = append(reporters, reporter.NewWebhook(url, alert.Headers))
+
+			onlyOnFailure := alert.On == "failure"
+			key := fmt.Sprintf("%s|%t|%s", alert.Type, onlyOnFailure, webhookAlertKey(url, alert.Headers))
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
+
+			if onlyOnFailure {
+				base = reporter.NewConditional(base, true)
+			}
+			reporters = append(reporters, base)
 		}
 	}
 
