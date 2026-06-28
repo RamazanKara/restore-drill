@@ -121,6 +121,80 @@ kubectl get pods -n "${NAMESPACE}" -l restore-drill/ephemeral=true --no-headers 
   exit 1
 }
 
+# --- etcd provider smoke ---
+# Prove the etcd provider restores a real snapshot under the Kubernetes runtime.
+# etcd ships static binaries, so bake them onto Alpine to get a shell and tar for
+# staging. The fixed non-:latest tag is used with the default IfNotPresent pull
+# policy once loaded into the kind node.
+ETCD_VERSION="${ETCD_VERSION:-v3.5.16}"
+etcd_image="restore-drill-smoke-etcd:local"
+etcd_build_dir="${tmp_dir}/etcd-image"
+mkdir -p "${etcd_build_dir}"
+cat > "${etcd_build_dir}/Dockerfile" <<DOCKER
+FROM alpine:3.20
+RUN apk add --no-cache ca-certificates tar
+RUN wget -qO /tmp/etcd.tar.gz https://github.com/etcd-io/etcd/releases/download/${ETCD_VERSION}/etcd-${ETCD_VERSION}-linux-amd64.tar.gz \\
+ && tar xzf /tmp/etcd.tar.gz -C /tmp \\
+ && mv /tmp/etcd-${ETCD_VERSION}-linux-amd64/etcd /tmp/etcd-${ETCD_VERSION}-linux-amd64/etcdctl /usr/local/bin/ \\
+ && rm -rf /tmp/*
+DOCKER
+docker build -t "${etcd_image}" "${etcd_build_dir}" >/dev/null
+kind load docker-image "${etcd_image}" --name "${CLUSTER_NAME}" >/dev/null
+
+# Generate a real snapshot fixture; snapshot restore rejects empty files.
+docker run --rm -v "${tmp_dir}:/out" "${etcd_image}" sh -ec '
+export ETCDCTL_API=3
+etcd --data-dir /tmp/seed \
+  --listen-client-urls http://127.0.0.1:2379 \
+  --advertise-client-urls http://127.0.0.1:2379 \
+  --listen-peer-urls http://127.0.0.1:2380 \
+  --initial-advertise-peer-urls http://127.0.0.1:2380 \
+  --initial-cluster default=http://127.0.0.1:2380 \
+  --name default > /tmp/etcd.log 2>&1 &
+until etcdctl --endpoints=127.0.0.1:2379 endpoint health >/dev/null 2>&1; do sleep 0.2; done
+etcdctl --endpoints=127.0.0.1:2379 put /registry/namespaces/default v1.Namespace >/dev/null
+etcdctl --endpoints=127.0.0.1:2379 put /app/config/flag on >/dev/null
+etcdctl --endpoints=127.0.0.1:2379 snapshot save /out/snapshot.db
+chmod 0644 /out/snapshot.db
+'
+
+cat > "${tmp_dir}/etcd-drill.yaml" <<EOF
+drills:
+  - name: k8s-etcd-snapshot
+    provider: etcd
+    backup:
+      tool: snapshot
+      source: ${tmp_dir}/snapshot.db
+    restore:
+      timeout: 4m
+      container:
+        image: ${etcd_image}
+    checks:
+      - name: namespaces-present
+        type: key_count
+        key: /registry/namespaces/
+        expect: "> 0"
+      - name: default-namespace
+        type: key_get
+        key: /registry/namespaces/default
+        expect: 'contains "Namespace"'
+      - name: cluster-healthy
+        type: query
+        sql: "endpoint health"
+        expect: 'contains "is healthy"'
+EOF
+
+go run ./cmd/restore-drill run \
+  --runtime kubernetes \
+  --kube-namespace "${NAMESPACE}" \
+  --config "${tmp_dir}/etcd-drill.yaml" \
+  --format json
+
+kubectl get pods -n "${NAMESPACE}" -l restore-drill/ephemeral=true --no-headers 2>/dev/null | grep -v Terminating && {
+  echo "restore-drill etcd ephemeral pods remain after smoke test" >&2
+  exit 1
+}
+
 if ! kubectl get namespace "${HELM_NAMESPACE}" >/dev/null 2>&1; then
   kubectl create namespace "${HELM_NAMESPACE}" >/dev/null
   created_helm_namespace=1

@@ -74,6 +74,9 @@ checks.
   dumps, pgBackRest, WAL-G, xtrabackup, mariabackup, Redis AOF, and Redis RDB.
 - Added Kubernetes smoke coverage for pod lifecycle, retained pods, and Helm
   runtime options.
+- Added Kubernetes smoke coverage for the etcd provider, restoring a real
+  snapshot and validating the keyspace through an ephemeral restore pod, so etcd
+  is proven on both the Docker and Kubernetes runtimes.
 - Added JSON report shape coverage and documented the v1 compatibility contract.
 - Added configured run report artifacts through `reporting.format` and
   `reporting.output`.
