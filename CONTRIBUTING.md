@@ -32,7 +32,7 @@ test coverage, or small edge cases that do not change public v1 contracts.
 - Do not commit generated release artifacts, local binaries, credentials, or
   real backup data.
 - Keep roadmap candidates clearly separate from GA behavior in README,
-  [docs/ROADMAP.md](docs/ROADMAP.md), and release notes.
+  [docs/project/roadmap.md](docs/project/roadmap.md), and release notes.
 
 ## Integration tests
 
@@ -47,6 +47,6 @@ integration fixture that exercises the documented restore path.
 
 ## Documentation
 
-Start with [docs/README.md](docs/README.md) to find the right page. README
+Start with [docs/index.md](docs/index.md) to find the right page. README
 should stay concise; detailed behavior belongs in the focused docs under
 `docs/`.

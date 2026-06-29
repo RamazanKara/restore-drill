@@ -5,7 +5,7 @@ restore-drill releases are tag driven. The canonical module is
 `ghcr.io/ramazankara/restore-drill`.
 
 This page is for maintainers cutting a release. Users looking for installation
-options should start with the root [README](../README.md#install).
+options should start with the root [README](../getting-started/installation.md).
 
 ## Release toolchain
 
@@ -127,6 +127,6 @@ restore-drill follows semantic versioning:
   fields, or Helm values.
 - Major releases are reserved for breaking public contracts.
 
-The v1 JSON result schema is documented in [REPORTING.md](REPORTING.md).
+The v1 JSON result schema is documented in [REPORTING.md](../reference/reporting.md).
 Support windows, stable contracts, and deprecation rules are documented in
-[SUPPORT.md](SUPPORT.md).
+[SUPPORT.md](support.md).

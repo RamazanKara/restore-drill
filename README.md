@@ -48,7 +48,7 @@ Provider restore images must include the database runtime, client tools, and the
 selected backup tool. Local/S3 staging also requires `tar` in the restore target
 image. Preflight checks fail early when required commands are missing.
 
-Future candidates are tracked in [docs/ROADMAP.md](docs/ROADMAP.md). Cost
+Future candidates are tracked in [docs/ROADMAP.md](docs/project/roadmap.md). Cost
 estimation is a non-goal.
 
 ## Install
@@ -163,18 +163,18 @@ ConfigMap-backed drill configuration with Secret-driven environment variables.
 
 ## Documentation
 
-- [docs/README.md](docs/README.md): documentation map
-- [docs/CONFIGURATION.md](docs/CONFIGURATION.md): full YAML reference
-- [docs/KUBERNETES.md](docs/KUBERNETES.md): Helm and Kubernetes runtime guide
-- [docs/REPORTING.md](docs/REPORTING.md): JSON, HTML, webhook, and metrics contracts
-- [docs/PRODUCTION.md](docs/PRODUCTION.md): production rollout checklist
-- [docs/ci-integration.md](docs/ci-integration.md): CI/CD and scheduled drill examples
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): engine, runtime, provider, and state model
-- [docs/RELEASE.md](docs/RELEASE.md): release process
-- [docs/SUPPORT.md](docs/SUPPORT.md): support, upgrade, and deprecation policy
-- [docs/ROADMAP.md](docs/ROADMAP.md): stable scope, non-goals, and roadmap candidates
-- [docs/schemas/config-v1.schema.json](docs/schemas/config-v1.schema.json): v1 config schema
-- [docs/schemas/run-result-v1.schema.json](docs/schemas/run-result-v1.schema.json): v1 run JSON schema
+- [docs/README.md](docs/index.md): documentation map
+- [docs/CONFIGURATION.md](docs/guides/configuration.md): full YAML reference
+- [docs/KUBERNETES.md](docs/guides/kubernetes.md): Helm and Kubernetes runtime guide
+- [docs/REPORTING.md](docs/reference/reporting.md): JSON, HTML, webhook, and metrics contracts
+- [docs/PRODUCTION.md](docs/operations/production.md): production rollout checklist
+- [docs/ci-integration.md](docs/guides/ci-cd.md): CI/CD and scheduled drill examples
+- [docs/ARCHITECTURE.md](docs/reference/architecture.md): engine, runtime, provider, and state model
+- [docs/RELEASE.md](docs/project/release.md): release process
+- [docs/SUPPORT.md](docs/project/support.md): support, upgrade, and deprecation policy
+- [docs/ROADMAP.md](docs/project/roadmap.md): stable scope, non-goals, and roadmap candidates
+- [docs/schemas/config-v1.schema.json](docs/reference/schemas/config-v1.schema.json): v1 config schema
+- [docs/schemas/run-result-v1.schema.json](docs/reference/schemas/run-result-v1.schema.json): v1 run JSON schema
 
 ## Production readiness in 10 minutes
 

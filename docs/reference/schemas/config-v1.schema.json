@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/RamazanKara/restore-drill/docs/schemas/config-v1.schema.json",
+  "$id": "https://github.com/RamazanKara/restore-drill/docs/reference/schemas/config-v1.schema.json",
   "title": "restore-drill v1 configuration",
   "type": "object",
   "required": ["drills"],

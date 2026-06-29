@@ -1,0 +1,74 @@
+site_name: restore-drill
+site_description: Automated backup restore verification for self-hosted infrastructure
+site_url: https://ramazankara.github.io/restore-drill/
+repo_url: https://github.com/RamazanKara/restore-drill
+repo_name: RamazanKara/restore-drill
+edit_uri: edit/main/docs/
+copyright: Apache-2.0 licensed
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.tracking
+    - navigation.indexes
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.action.edit
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - Installation: getting-started/installation.md
+      - Quick start: getting-started/quickstart.md
+  - Guides:
+      - Configuration: guides/configuration.md
+      - Kubernetes: guides/kubernetes.md
+      - CI/CD integration: guides/ci-cd.md
+      - Incident response: guides/incident-response.md
+  - Reference:
+      - CLI: reference/cli.md
+      - Reporting & alerts: reference/reporting.md
+      - Architecture: reference/architecture.md
+      - Troubleshooting: reference/troubleshooting.md
+      - Schemas: reference/schemas/index.md
+  - Operations:
+      - Production rollout: operations/production.md
+      - State & history: operations/state.md
+  - Project:
+      - Roadmap: project/roadmap.md
+      - Support policy: project/support.md
+      - Release process: project/release.md

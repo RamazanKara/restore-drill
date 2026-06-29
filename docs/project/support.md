@@ -24,7 +24,7 @@ Within v1, these contracts should remain backward compatible:
 - Prometheus metric names and label meanings
 - run JSON field names, types, and meanings
 - webhook payload envelope and embedded run result shape
-- Helm values documented in [KUBERNETES.md](KUBERNETES.md)
+- Helm values documented in [KUBERNETES.md](../guides/kubernetes.md)
 
 Minor releases may add optional fields, flags, metrics, report fields, providers,
 or Helm values.
