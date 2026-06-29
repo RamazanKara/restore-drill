@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/RamazanKara/restore-drill/pkg/engine"
-	"github.com/RamazanKara/restore-drill/pkg/reporter"
+	"github.com/RamazanKara/restore-drill/internal/engine"
+	"github.com/RamazanKara/restore-drill/internal/reporter"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 	"gopkg.in/yaml.v3"
 )
