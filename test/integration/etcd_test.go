@@ -8,10 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/RamazanKara/restore-drill/pkg/engine"
-	"github.com/RamazanKara/restore-drill/pkg/providers/etcd"
-	"github.com/RamazanKara/restore-drill/pkg/reporter"
-	"github.com/RamazanKara/restore-drill/pkg/runtime/docker"
+	"github.com/RamazanKara/restore-drill/internal/config"
+	"github.com/RamazanKara/restore-drill/internal/engine"
+	"github.com/RamazanKara/restore-drill/internal/providers/etcd"
+	"github.com/RamazanKara/restore-drill/internal/reporter"
+	"github.com/RamazanKara/restore-drill/internal/runtime/docker"
 )
 
 // etcdVersion pins the etcd release whose static binaries are baked into the
@@ -69,7 +70,7 @@ drills:
         expect: 'contains "is healthy"'
 `)
 
-	cfg, err := engine.LoadConfig(cfgPath)
+	cfg, err := config.LoadConfig(cfgPath)
 	if err != nil {
 		t.Fatalf("load config: %v", err)
 	}

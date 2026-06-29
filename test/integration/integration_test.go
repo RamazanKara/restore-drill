@@ -10,12 +10,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/RamazanKara/restore-drill/pkg/engine"
-	"github.com/RamazanKara/restore-drill/pkg/providers/mysql"
-	"github.com/RamazanKara/restore-drill/pkg/providers/postgres"
-	"github.com/RamazanKara/restore-drill/pkg/providers/redis"
-	"github.com/RamazanKara/restore-drill/pkg/reporter"
-	"github.com/RamazanKara/restore-drill/pkg/runtime/docker"
+	"github.com/RamazanKara/restore-drill/internal/config"
+	"github.com/RamazanKara/restore-drill/internal/engine"
+	"github.com/RamazanKara/restore-drill/internal/providers/mysql"
+	"github.com/RamazanKara/restore-drill/internal/providers/postgres"
+	"github.com/RamazanKara/restore-drill/internal/providers/redis"
+	"github.com/RamazanKara/restore-drill/internal/reporter"
+	"github.com/RamazanKara/restore-drill/internal/runtime/docker"
 )
 
 func TestIntegration(t *testing.T) {
@@ -266,7 +267,7 @@ drills:
         expect: "ok"
 `)
 
-	cfg, err := engine.LoadConfig(cfgPath)
+	cfg, err := config.LoadConfig(cfgPath)
 	if err != nil {
 		t.Fatalf("load config: %v", err)
 	}
