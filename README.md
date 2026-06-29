@@ -163,18 +163,15 @@ ConfigMap-backed drill configuration with Secret-driven environment variables.
 
 ## Documentation
 
-- [docs/README.md](docs/index.md): documentation map
-- [docs/CONFIGURATION.md](docs/guides/configuration.md): full YAML reference
-- [docs/KUBERNETES.md](docs/guides/kubernetes.md): Helm and Kubernetes runtime guide
-- [docs/REPORTING.md](docs/reference/reporting.md): JSON, HTML, webhook, and metrics contracts
-- [docs/PRODUCTION.md](docs/operations/production.md): production rollout checklist
-- [docs/ci-integration.md](docs/guides/ci-cd.md): CI/CD and scheduled drill examples
-- [docs/ARCHITECTURE.md](docs/reference/architecture.md): engine, runtime, provider, and state model
-- [docs/RELEASE.md](docs/project/release.md): release process
-- [docs/SUPPORT.md](docs/project/support.md): support, upgrade, and deprecation policy
-- [docs/ROADMAP.md](docs/project/roadmap.md): stable scope, non-goals, and roadmap candidates
-- [docs/schemas/config-v1.schema.json](docs/reference/schemas/config-v1.schema.json): v1 config schema
-- [docs/schemas/run-result-v1.schema.json](docs/reference/schemas/run-result-v1.schema.json): v1 run JSON schema
+Full documentation is published at
+**[ramazankara.github.io/restore-drill](https://ramazankara.github.io/restore-drill/)**
+(source under [`docs/`](docs/)):
+
+- Getting started: [Installation](docs/getting-started/installation.md) · [Quick start](docs/getting-started/quickstart.md)
+- Guides: [Configuration](docs/guides/configuration.md) · [Kubernetes](docs/guides/kubernetes.md) · [CI/CD integration](docs/guides/ci-cd.md) · [Incident response](docs/guides/incident-response.md)
+- Reference: [CLI](docs/reference/cli.md) · [Reporting & alerts](docs/reference/reporting.md) · [Architecture](docs/reference/architecture.md) · [Troubleshooting](docs/reference/troubleshooting.md) · [Schemas](docs/reference/schemas/)
+- Operations: [Production rollout](docs/operations/production.md) · [State & history](docs/operations/state.md)
+- Project: [Roadmap](docs/project/roadmap.md) · [Support policy](docs/project/support.md) · [Release process](docs/project/release.md)
 
 ## Production readiness in 10 minutes
 

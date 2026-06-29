@@ -257,3 +257,9 @@ durations such as `720h`.
 
 See [REPORTING.md](../reference/reporting.md) for output path rules and the JSON
 compatibility policy.
+
+## See also
+
+- [CLI reference](../reference/cli.md)
+- [Reporting & alerts](../reference/reporting.md)
+- [Kubernetes](kubernetes.md)

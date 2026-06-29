@@ -13,6 +13,13 @@ small, reliable restore-verification core over broad feature sprawl.
   Redis paths remain boringly reliable.
 - Security and release changes take priority over convenience features.
 
+## Decision Authority
+
+Final decisions rest with the maintainer ([MAINTAINERS.md](MAINTAINERS.md)).
+Disagreements are resolved in the relevant issue or pull request, in the open;
+the maintainer makes the final call when consensus is not reached. Proposals to
+change this governance follow the same contribution path below.
+
 ## Contribution Path
 
 1. Open an issue for behavior changes, new providers, or public contract changes.

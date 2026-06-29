@@ -185,3 +185,9 @@ Delete retained pods after inspection:
 ```bash
 kubectl delete pod -n restore-drill -l restore-drill/ephemeral=true
 ```
+
+## See also
+
+- [Configuration](configuration.md)
+- [Production rollout](../operations/production.md)
+- [Reporting & alerts](../reference/reporting.md)

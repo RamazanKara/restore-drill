@@ -193,3 +193,9 @@ restore_drill_backup_age_seconds > 86400
 The Pushgateway write replaces the current restore-drill grouping on every run,
 so repeated CronJob executions publish current-run values instead of
 accumulating stale counters.
+
+## See also
+
+- [Configuration](../guides/configuration.md)
+- [CLI reference](cli.md)
+- [State & history](../operations/state.md)

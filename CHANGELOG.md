@@ -7,6 +7,20 @@ versioning.
 
 ## [Unreleased]
 
+### Added
+
+- Published a documentation site (MkDocs Material, deployed to GitHub Pages) with
+  a reorganized `docs/` tree (getting-started / guides / reference / operations /
+  project) and new CLI reference, troubleshooting, incident-response, and
+  state & history pages.
+
+### Changed
+
+- Restructured the Go source under `internal/` — a dedicated `internal/cli`
+  wiring layer (thin `main`) and a `config` package split out of `engine`. This
+  is internal only: the `go install` path and all CLI, config, JSON, metrics, and
+  Helm contracts are unchanged.
+
 ## [1.3.0] - 2026-06-28
 
 ### Added

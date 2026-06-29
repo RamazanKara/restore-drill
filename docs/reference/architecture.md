@@ -132,3 +132,9 @@ artifacts automatically after `restore-drill run`.
 - Kubernetes RBAC is namespace-scoped to pod lifecycle, pod exec, and pod logs
 - NetworkPolicy should allow only DNS, backup storage, metrics, and alert
   destinations
+
+## See also
+
+- [Configuration](../guides/configuration.md)
+- [Reporting & alerts](reporting.md)
+- [State & history](../operations/state.md)

@@ -187,3 +187,9 @@ values, and provider errors. The report contract is documented in
 | 1 | One or more drills failed validation, restore, reporting, or configuration. |
 
 Use the exit code to gate deployments or trigger alerts.
+
+## See also
+
+- [CLI reference](../reference/cli.md)
+- [Incident response](incident-response.md)
+- [Reporting & alerts](../reference/reporting.md)
