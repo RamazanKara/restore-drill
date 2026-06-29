@@ -4,12 +4,12 @@
 before YAML parsing and supports `${VAR}` plus `${VAR:-default}`.
 
 The v1 machine-readable schema is available at
-[docs/schemas/config-v1.schema.json](schemas/config-v1.schema.json). The schema
+[docs/schemas/config-v1.schema.json](../reference/schemas/config-v1.schema.json). The schema
 captures the documented wire shape; the Go validator remains the source of
 truth for provider/tool/check compatibility.
 
 If you want a runnable config before reading the whole reference, start with
-[examples/demo-redis-aof.yaml](../examples/demo-redis-aof.yaml). It restores a
+[examples/demo-redis-aof.yaml](https://github.com/RamazanKara/restore-drill/blob/main/examples/demo-redis-aof.yaml). It restores a
 small Redis AOF fixture in Docker and exercises the same config shape used for
 larger production drills.
 
@@ -233,7 +233,7 @@ Metrics are pushed after each run when `enabled` is true and `pushgateway` is
 set. Labels are used as Pushgateway grouping labels, except `environment`, which
 is emitted as a metric label and defaults to `default`.
 
-See [REPORTING.md](REPORTING.md) for metric names and alert examples.
+See [REPORTING.md](../reference/reporting.md) for metric names and alert examples.
 
 ## Reporting
 
@@ -255,5 +255,5 @@ each run:
 `retention` defaults to `90d` and accepts day counts such as `30d` or Go
 durations such as `720h`.
 
-See [REPORTING.md](REPORTING.md) for output path rules and the JSON
+See [REPORTING.md](../reference/reporting.md) for output path rules and the JSON
 compatibility policy.

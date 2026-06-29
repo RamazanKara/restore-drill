@@ -1,0 +1,2 @@
+# Documentation site toolchain (MkDocs Material). Pinned for reproducible builds.
+mkdocs-material==9.5.49

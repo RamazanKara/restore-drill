@@ -39,7 +39,7 @@ It intentionally does not:
   Slack/Mattermost alerts, local history, Prometheus Pushgateway
 
 The public contracts that must remain compatible within v1 are documented in
-[SUPPORT.md](SUPPORT.md) and [REPORTING.md](REPORTING.md).
+[SUPPORT.md](support.md) and [REPORTING.md](../reference/reporting.md).
 
 ## Release Gates
 

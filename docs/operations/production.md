@@ -86,7 +86,7 @@ Preflight checks fail fast when required commands are missing.
 - Alert when `restore_drill_backup_age_seconds` exceeds the allowed RPO window.
 
 Detailed report file behavior, webhook payloads, metrics, and alert examples are
-in [REPORTING.md](REPORTING.md).
+in [REPORTING.md](../reference/reporting.md).
 
 ## Network policy
 

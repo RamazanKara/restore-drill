@@ -46,7 +46,7 @@ Helm rendering fails fast when neither `config.inline` nor
 ## Values that matter most
 
 Start with these values before tuning the rest of
-[values.yaml](../deploy/helm/restore-drill/values.yaml):
+[values.yaml](https://github.com/RamazanKara/restore-drill/blob/main/deploy/helm/restore-drill/values.yaml):
 
 ```yaml
 schedule: "0 3 * * *"
@@ -157,7 +157,7 @@ not to restore-drill CronJob pods. A CronJob does not provide a stable
 restore-drill endpoint to scrape, so a direct restore-drill `ServiceMonitor`
 would be noisy at best and usually empty.
 
-Prometheus alert examples are documented in [REPORTING.md](REPORTING.md).
+Prometheus alert examples are documented in [REPORTING.md](../reference/reporting.md).
 
 ## Troubleshooting
 

@@ -1,5 +1,5 @@
 # restore-drill example configuration
-# See docs/ARCHITECTURE.md for full reference.
+# See docs/guides/configuration.md for full reference.
 
 drills:
   - name: nightly-postgres

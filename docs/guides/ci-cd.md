@@ -134,7 +134,7 @@ spec:
 ```
 
 For routine Kubernetes schedules, prefer the Helm chart documented in
-[KUBERNETES.md](KUBERNETES.md).
+[KUBERNETES.md](kubernetes.md).
 
 ## Incident mode
 
@@ -177,7 +177,7 @@ restore-drill report --format json --last 30
 
 HTML reports include per-check failure evidence with expected values, actual
 values, and provider errors. The report contract is documented in
-[REPORTING.md](REPORTING.md).
+[REPORTING.md](../reference/reporting.md).
 
 ## Exit codes
 

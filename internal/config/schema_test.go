@@ -1,4 +1,4 @@
-package schemas_test
+package config_test
 
 import (
 	"bytes"
@@ -85,10 +85,13 @@ func TestRunResultSchemaValidatesReporterOutput(t *testing.T) {
 	}
 }
 
+// schemaDir locates the published JSON schemas relative to this package.
+const schemaDir = "../../docs/reference/schemas"
+
 func compileSchema(t *testing.T, name string) *jsonschema.Schema {
 	t.Helper()
 	compiler := jsonschema.NewCompiler()
-	path := filepath.Join(name)
+	path := filepath.Join(schemaDir, name)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read schema %s: %v", name, err)
