@@ -7,6 +7,11 @@ on:
       - "docs/**"
       - "mkdocs.yml"
       - ".github/workflows/docs.yml"
+  pull_request:
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+      - ".github/workflows/docs.yml"
   workflow_dispatch:
 
 # Read-only by default; the deploy job elevates to the minimum it needs.
@@ -41,6 +46,8 @@ jobs:
 
   deploy:
     needs: build
+    # Build runs on PRs to validate; only deploy from main.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       pages: write
