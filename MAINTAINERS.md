@@ -4,6 +4,19 @@ restore-drill is maintained by the repository owner:
 
 - Ramazan Kara (`@RamazanKara`)
 
+## Contact & escalation
+
+- **General questions, bugs, features:** open a
+  [GitHub issue](https://github.com/RamazanKara/restore-drill/issues).
+- **Security issues:** follow [SECURITY.md](SECURITY.md) — do not open a public
+  issue.
+- **Stalled review:** if a pull request or issue sees no response in about two
+  weeks, leave a polite comment mentioning `@RamazanKara` to bump it.
+
+As a single-maintainer project, responses are best-effort. Contributors
+interested in becoming co-maintainers should demonstrate a track record of
+reviewed, merged changes and then open an issue proposing it.
+
 ## Maintainer Responsibilities
 
 - Keep the documented v1 YAML, CLI, JSON, metrics, and Helm contracts stable.

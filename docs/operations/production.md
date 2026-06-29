@@ -119,3 +119,9 @@ goreleaser release --snapshot --clean --skip=publish
 The local release gate requires Go, Docker/Buildx, Helm, GoReleaser, Syft, kind,
 kubectl, Cosign, and govulncheck. `make vuln` allows only reviewed
 no-fixed-version Docker/Moby advisories listed in `.govulncheck.allowlist`.
+
+## See also
+
+- [Kubernetes](../guides/kubernetes.md)
+- [State & history](state.md)
+- [Incident response](../guides/incident-response.md)
