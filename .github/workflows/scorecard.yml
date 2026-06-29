@@ -7,15 +7,20 @@ on:
   schedule:
     - cron: "41 4 * * 1"
 
+# Keep the top-level token read-only; Scorecard's publish_results verification
+# rejects globally-granted id-token/security-events write permissions. The
+# elevated permissions are scoped to the job below instead.
 permissions:
   contents: read
-  id-token: write
-  security-events: write
 
 jobs:
   scorecard:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write # upload SARIF to code scanning
+      id-token: write # publish results to the OpenSSF API
     steps:
       - uses: actions/checkout@v6
         with:
