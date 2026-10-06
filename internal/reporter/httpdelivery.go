@@ -3,9 +3,11 @@ package reporter
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"time"
 )
 
@@ -58,7 +60,7 @@ func (d httpDelivery) post(ctx context.Context, body []byte) error {
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, d.URL, bytes.NewReader(body))
 		if err != nil {
-			return fmt.Errorf("create request: %w", err)
+			return fmt.Errorf("create request: %w", redactDeliveryURL(err))
 		}
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("User-Agent", "restore-drill/1.0")
@@ -68,7 +70,7 @@ func (d httpDelivery) post(ctx context.Context, body []byte) error {
 
 		resp, err := client.Do(req)
 		if err != nil {
-			lastErr = fmt.Errorf("request: %w", err)
+			lastErr = fmt.Errorf("request: %w", redactDeliveryURL(err))
 			continue
 		}
 		if closeErr := resp.Body.Close(); closeErr != nil {
@@ -76,7 +78,7 @@ func (d httpDelivery) post(ctx context.Context, body []byte) error {
 		}
 
 		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-			slog.Info("delivery sent", "url", d.URL, "status", resp.StatusCode)
+			slog.Info("delivery sent", "host", req.URL.Host, "status", resp.StatusCode)
 			return nil
 		}
 		if resp.StatusCode >= 500 {
@@ -89,6 +91,34 @@ func (d httpDelivery) post(ctx context.Context, body []byte) error {
 
 	return lastErr
 }
+
+// Webhook paths and query strings can be bearer credentials. Preserve the
+// underlying transport error for errors.Is/As without including the target URL
+// in diagnostics that callers may log or persist as drill evidence.
+func redactDeliveryURL(err error) error {
+	var target *url.Error
+	if !errors.As(err, &target) {
+		return err
+	}
+	redacted := *target
+	redacted.URL = "[redacted]"
+	redacted.Err = redactedDeliveryCause{target}
+	return &redacted
+}
+
+// net/http can flatten redirect URLs into the cause's text, so suppress the
+// whole diagnostic while retaining the original error chain and classification.
+type redactedDeliveryCause struct {
+	original *url.Error
+}
+
+func (e redactedDeliveryCause) Error() string { return "[redacted]" }
+
+func (e redactedDeliveryCause) Unwrap() error { return e.original.Err }
+
+func (e redactedDeliveryCause) Timeout() bool { return e.original.Timeout() }
+
+func (e redactedDeliveryCause) Temporary() bool { return e.original.Temporary() }
 
 func sleepContext(ctx context.Context, d time.Duration) error {
 	timer := time.NewTimer(d)
