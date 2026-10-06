@@ -102,8 +102,23 @@ func redactDeliveryURL(err error) error {
 	}
 	redacted := *target
 	redacted.URL = "[redacted]"
+	redacted.Err = redactedDeliveryCause{target}
 	return &redacted
 }
+
+// net/http can flatten redirect URLs into the cause's text, so suppress the
+// whole diagnostic while retaining the original error chain and classification.
+type redactedDeliveryCause struct {
+	original *url.Error
+}
+
+func (e redactedDeliveryCause) Error() string { return "[redacted]" }
+
+func (e redactedDeliveryCause) Unwrap() error { return e.original.Err }
+
+func (e redactedDeliveryCause) Timeout() bool { return e.original.Timeout() }
+
+func (e redactedDeliveryCause) Temporary() bool { return e.original.Temporary() }
 
 func sleepContext(ctx context.Context, d time.Duration) error {
 	timer := time.NewTimer(d)
