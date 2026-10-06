@@ -7,6 +7,11 @@ versioning.
 
 ## [Unreleased]
 
+### Fixed
+
+- Omit webhook URL paths and query strings from delivery logs and URL errors so
+  Slack and other webhook credentials are not copied into routine diagnostics.
+
 ### Added
 
 - Published a documentation site (MkDocs Material, deployed to GitHub Pages) with
