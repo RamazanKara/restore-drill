@@ -3,23 +3,35 @@ updates:
   - package-ecosystem: gomod
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
+    groups:
+      dependencies:
+        patterns: ["*"]
     open-pull-requests-limit: 5
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
+    groups:
+      dependencies:
+        patterns: ["*"]
     open-pull-requests-limit: 5
 
   - package-ecosystem: docker
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
+    groups:
+      dependencies:
+        patterns: ["*"]
     open-pull-requests-limit: 5
 
   - package-ecosystem: helm
     directory: /deploy/helm/restore-drill
     schedule:
-      interval: weekly
+      interval: monthly
+    groups:
+      dependencies:
+        patterns: ["*"]
     open-pull-requests-limit: 5
