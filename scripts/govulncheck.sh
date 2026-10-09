@@ -6,7 +6,11 @@ tmp="$(mktemp)"
 trap 'rm -f "$tmp"' EXIT
 
 set +e
-GOTOOLCHAIN=auto go run golang.org/x/vuln/cmd/govulncheck@latest ./... >"$tmp" 2>&1
+if command -v govulncheck >/dev/null 2>&1; then
+  govulncheck ./... >"$tmp" 2>&1
+else
+  GOTOOLCHAIN=auto go run golang.org/x/vuln/cmd/govulncheck@latest ./... >"$tmp" 2>&1
+fi
 status=$?
 set -e
 

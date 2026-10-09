@@ -51,6 +51,41 @@ func TestEngineCleansUpAfterRestoreFailure(t *testing.T) {
 	}
 }
 
+func TestEngineCleansUpAfterCancellation(t *testing.T) {
+	for _, cause := range []string{"canceled", "timeout"} {
+		t.Run(cause, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			rt := &lifecycleRuntime{}
+			provider := &lifecycleProvider{}
+			drill := lifecycleDrill("canceled-restore")
+			wantErr := context.Canceled
+			if cause == "timeout" {
+				drill.Restore.Timeout = "1ms"
+				provider.restoreDelays = map[string]time.Duration{drill.Backup.Source: time.Second}
+				wantErr = context.DeadlineExceeded
+			} else {
+				provider.restoreCancel = cancel
+			}
+			eng := New(rt, &captureReporter{})
+			eng.RegisterProvider(provider)
+			result := eng.executeDrill(ctx, drill)
+			if !errors.Is(result.Error, wantErr) {
+				t.Fatalf("expected restore cancellation %v, got %v", wantErr, result.Error)
+			}
+			if provider.cleanupCount() != 1 || rt.destroyCount() != 1 {
+				t.Fatal("canceled drill did not clean up its target")
+			}
+			if provider.cleanupContextErr != nil || rt.destroyContextErr != nil {
+				t.Fatalf("cleanup received canceled contexts: provider=%v runtime=%v", provider.cleanupContextErr, rt.destroyContextErr)
+			}
+			if !provider.cleanupHasDeadline || !rt.destroyHasDeadline {
+				t.Fatal("cleanup must have a bounded deadline")
+			}
+		})
+	}
+}
+
 func TestEngineCleansUpAfterValidationFailure(t *testing.T) {
 	rt := &lifecycleRuntime{}
 	provider := &lifecycleProvider{validateErr: errors.New("validation failed")}
@@ -228,11 +263,13 @@ func (r *captureReporter) Report(_ context.Context, results []DrillResult) error
 }
 
 type lifecycleRuntime struct {
-	mu         sync.Mutex
-	nextID     int
-	destroyed  []string
-	specs      []ContainerSpec
-	destroyErr error
+	mu                 sync.Mutex
+	nextID             int
+	destroyed          []string
+	specs              []ContainerSpec
+	destroyErr         error
+	destroyContextErr  error
+	destroyHasDeadline bool
 }
 
 func (r *lifecycleRuntime) Create(_ context.Context, spec ContainerSpec) (Container, error) {
@@ -261,10 +298,12 @@ func (r *lifecycleRuntime) CopyTo(context.Context, Container, string, io.Reader)
 	return nil
 }
 
-func (r *lifecycleRuntime) Destroy(_ context.Context, c Container) error {
+func (r *lifecycleRuntime) Destroy(ctx context.Context, c Container) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.destroyed = append(r.destroyed, c.ID())
+	r.destroyContextErr = ctx.Err()
+	_, r.destroyHasDeadline = ctx.Deadline()
 	return r.destroyErr
 }
 
@@ -306,15 +345,18 @@ func (c *lifecycleContainer) Port(containerPort int) int {
 }
 
 type lifecycleProvider struct {
-	name          string
-	mu            sync.Mutex
-	preflightErr  error
-	restoreErr    error
-	validateErr   error
-	checkErr      error
-	cleanupErr    error
-	restoreDelays map[string]time.Duration
-	cleanupCalls  int
+	name               string
+	mu                 sync.Mutex
+	preflightErr       error
+	restoreErr         error
+	validateErr        error
+	checkErr           error
+	cleanupErr         error
+	restoreDelays      map[string]time.Duration
+	cleanupCalls       int
+	restoreCancel      context.CancelFunc
+	cleanupContextErr  error
+	cleanupHasDeadline bool
 }
 
 func (p *lifecycleProvider) Name() string {
@@ -329,6 +371,10 @@ func (p *lifecycleProvider) Preflight(context.Context, Runtime, config.BackupCon
 }
 
 func (p *lifecycleProvider) Restore(ctx context.Context, _ Runtime, cfg config.BackupConfig, _ Container) (*RestoreResult, error) {
+	if p.restoreCancel != nil {
+		p.restoreCancel()
+		return nil, ctx.Err()
+	}
 	if delay := p.restoreDelays[cfg.Source]; delay > 0 {
 		timer := time.NewTimer(delay)
 		defer timer.Stop()
@@ -361,10 +407,12 @@ func (p *lifecycleProvider) Validate(_ context.Context, _ Runtime, _ Container, 
 	return &ValidationResult{Checks: results}, nil
 }
 
-func (p *lifecycleProvider) Cleanup(context.Context, Container) error {
+func (p *lifecycleProvider) Cleanup(ctx context.Context, _ Container) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.cleanupCalls++
+	p.cleanupContextErr = ctx.Err()
+	_, p.cleanupHasDeadline = ctx.Deadline()
 	return p.cleanupErr
 }
 

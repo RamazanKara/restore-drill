@@ -96,10 +96,13 @@ restore target before running the provider restore command.
 
 | Provider | `backup.tool` values | Required restore-image tools |
 | --- | --- | --- |
-| PostgreSQL | `pg_dump`, `pg_restore`, `pgbackrest`, `wal-g`, `walg` | `psql`, `pg_isready`, selected backup tool, `pg_ctl` for physical/PITR flows |
-| MySQL/MariaDB | `mysqldump`, `xtrabackup`, `mariabackup` | `mysql` or `mariadb`, `mysqladmin` or `mariadb-admin`, selected backup tool |
+| PostgreSQL | `pg_dump`, `pg_restore`, `pgbackrest`, `wal-g`, `walg` | `psql`, `pg_isready`; `pg_restore` for custom dumps; `pg_ctl` and `pgbackrest` or WAL-G for physical/PITR flows |
+| MySQL/MariaDB | `mysqldump`, `xtrabackup`, `mariabackup` | `mysql` or `mariadb`, `mysqladmin` or `mariadb-admin`; physical restores also need the selected backup tool and `mysqld_safe` or `mariadbd-safe` |
 | Redis | `rdb`, `aof` | `redis-server`, `redis-cli` |
 | etcd | `snapshot` | `etcd`, `etcdctl` |
+
+Logical `pg_dump` and `mysqldump` restores use the database client; the dump
+creation command itself is not required in the restore image.
 
 Archive-based physical backups also need archive tools in the restore image:
 `tar` for tar archives, `xbstream` for xbstream archives, and `gzip` for

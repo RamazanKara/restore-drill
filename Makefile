@@ -48,8 +48,8 @@ fmt:
 	gofumpt -w .
 	goimports -w .
 
-check-examples:
-	for f in examples/*.yaml; do go run ./cmd/restore-drill validate --config "$$f"; done
+check-examples: build
+	set -e; for f in examples/*.yaml; do ./bin/$(BINARY) validate --config "$$f"; done
 
 helm-lint:
 	helm lint deploy/helm/restore-drill --set-file config.inline=examples/redis-rdb.yaml

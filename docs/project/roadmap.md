@@ -16,7 +16,7 @@ restore-drill verifies restores:
 - stage backup artifacts from documented sources
 - restore with the configured provider and tool
 - validate restored data
-- report RTO/RPO, validation evidence, retained-target details, and history
+- report restore timing, validation evidence, retained-target details, and history
 - publish metrics and webhook notifications for operational follow-up
 
 It intentionally does not:

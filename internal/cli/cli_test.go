@@ -3,16 +3,96 @@ package cli
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/RamazanKara/restore-drill/internal/config"
 	"github.com/RamazanKara/restore-drill/internal/state"
 )
+
+func TestRunCommandKeepsEvidenceAfterAlertFailure(t *testing.T) {
+	for _, parallel := range []bool{false, true} {
+		t.Run(fmt.Sprintf("parallel=%t", parallel), func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			t.Setenv("USERPROFILE", home)
+			var alerts atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				if r.URL.Path == "/alert" {
+					alerts.Add(1)
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
+				w.WriteHeader(http.StatusInternalServerError)
+				_, _ = w.Write([]byte(`{"message":"daemon unavailable"}`))
+			}))
+			defer server.Close()
+			t.Setenv("DOCKER_HOST", server.URL)
+			t.Setenv("DOCKER_API_VERSION", "1.47")
+			t.Setenv("DOCKER_TLS_VERIFY", "")
+			t.Setenv("DOCKER_CERT_PATH", "")
+			output := filepath.Join(t.TempDir(), "reports")
+			configPath := writeCLIConfig(t, t.TempDir(), fmt.Sprintf(`drills:
+  - name: redis
+    provider: redis
+    backup:
+      tool: aof
+      source: /mounted/appendonly.aof
+    restore:
+      container:
+        image: redis:7-alpine
+    alerts:
+      - type: webhook
+        url: %q
+reporting:
+  format: [json, html]
+  output: %q
+`, server.URL+"/alert", filepath.ToSlash(output)))
+			_, err := executeRoot(t, "run", "--config", configPath, "--runtime", "docker", "--format", "json", fmt.Sprintf("--parallel=%t", parallel))
+			if err == nil || !strings.Contains(err.Error(), "endpoint returned 400") || !strings.Contains(err.Error(), "one or more drills failed") {
+				t.Fatalf("expected delivery and drill errors, got %v", err)
+			}
+			if alerts.Load() != 1 {
+				t.Fatalf("expected one alert attempt, got %d", alerts.Load())
+			}
+			run, err := state.Load(state.DefaultPath())
+			if err != nil || len(run.Results) != 1 || !strings.Contains(run.Results[0].Error, "daemon unavailable") {
+				t.Fatalf("failed drill state was lost: %+v, %v", run, err)
+			}
+			history, err := state.LoadHistory(time.Time{})
+			if err != nil || len(history) != 1 {
+				t.Fatalf("failed drill history was lost: %+v, %v", history, err)
+			}
+			files, err := os.ReadDir(output)
+			if err != nil || len(files) != 2 {
+				t.Fatalf("configured reports were lost: %v, %v", files, err)
+			}
+			for _, file := range files {
+				body, err := os.ReadFile(filepath.Join(output, file.Name()))
+				if err != nil || !strings.Contains(string(body), "daemon unavailable") {
+					t.Fatalf("report %s lacks failure evidence: %s, %v", file.Name(), body, err)
+				}
+				if filepath.Ext(file.Name()) == ".json" && !json.Valid(body) {
+					t.Fatalf("invalid JSON report: %s", body)
+				}
+			}
+			status, err := executeRoot(t, "status")
+			if err != nil || !strings.Contains(status, "FAIL") {
+				t.Fatalf("status lost failed run: %s, %v", status, err)
+			}
+		})
+	}
+}
 
 func TestValidateCommandAcceptsValidConfig(t *testing.T) {
 	configPath := writeCLIConfig(t, t.TempDir(), `drills:
@@ -74,7 +154,9 @@ func TestRunCommandRejectsBadRuntimeBeforeRuntimeInit(t *testing.T) {
 }
 
 func TestReportCommandJSONOutput(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	run := &state.LastRun{
 		Timestamp: time.Now().UTC(),
 		Results: []state.RunResult{

@@ -23,8 +23,8 @@ create container: ... Cannot connect to the Docker daemon
 ```
 
 The Docker runtime can't reach a daemon. Confirm Docker is running and your user
-can talk to it (`docker info`). In CI, ensure a Docker service / `setup-buildx`
-step is present.
+can talk to it (`docker info`). In CI, provide a running Docker daemon;
+installing Buildx alone does not start one.
 
 ## Kubernetes: pods never become ready
 
