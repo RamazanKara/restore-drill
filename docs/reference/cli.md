@@ -56,6 +56,11 @@ restore-drill validate --config drill.yaml
 Check that the local environment is ready: config validity, runtime
 reachability, state/report path writability, and release tooling.
 
+`doctor` requires local Go and Git and warns about missing optional development
+tools. Its Kubernetes probe lists pods in the `restore-drill` namespace. It
+does not create a target, inspect its installed tools, or verify backup access;
+those require a real drill.
+
 ```bash
 restore-drill doctor --config drill.yaml --runtime docker
 restore-drill doctor --config drill.yaml --runtime kubernetes --format json --strict
@@ -102,6 +107,16 @@ Print the version, commit, and build date (set via ldflags at release time).
 
 ```bash
 restore-drill version
+```
+
+## Help and shell completion
+
+Cobra also provides `help [command]` and `completion` for Bash, Zsh, Fish, and
+PowerShell. Generate a completion script on stdout, for example:
+
+```bash
+restore-drill help run
+restore-drill completion bash
 ```
 
 ## Exit codes

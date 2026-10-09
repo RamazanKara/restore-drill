@@ -122,13 +122,21 @@ func (r *Runtime) Create(ctx context.Context, spec engine.ContainerSpec) (engine
 	if err != nil {
 		return nil, fmt.Errorf("create pod: %w", err)
 	}
+	ready := false
+	defer func() {
+		if !ready {
+			cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+			defer cancel()
+			if err := r.client.CoreV1().Pods(r.namespace).Delete(cleanupCtx, name, metav1.DeleteOptions{}); err != nil {
+				slog.Error("failed to remove unready pod", "name", name, "error", err)
+			}
+		}
+	}()
 
 	slog.Info("pod created", "name", created.Name, "namespace", r.namespace)
 
 	// Wait for pod to be running.
 	if err := r.waitPodReady(ctx, name); err != nil {
-		// Attempt cleanup on failure.
-		_ = r.client.CoreV1().Pods(r.namespace).Delete(ctx, name, metav1.DeleteOptions{})
 		return nil, err
 	}
 
@@ -145,6 +153,7 @@ func (r *Runtime) Create(ctx context.Context, spec engine.ContainerSpec) (engine
 		ports:     portMap,
 	}
 
+	ready = true
 	return p, nil
 }
 

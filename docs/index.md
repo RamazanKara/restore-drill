@@ -4,7 +4,7 @@
 
 Backups that are never restored are guesses. `restore-drill` restores real backup
 artifacts into disposable Docker containers or Kubernetes pods, validates the
-restored data, records RTO/RPO evidence, and publishes machine-readable results
+restored data, records restore timing and check evidence, and publishes machine-readable results
 for audits and alerts.
 
 It is intentionally focused on one job: proving that backups can be restored. It
@@ -16,7 +16,7 @@ infrastructure, or replace observability platforms.
 <div class="grid cards" markdown>
 
 - :material-download: **[Installation](getting-started/installation.md)** — install the CLI and container image, and verify signatures.
-- :material-rocket-launch: **[Quick start](getting-started/quickstart.md)** — run the self-contained Redis demo in two commands.
+- :material-rocket-launch: **[Quick start](getting-started/quickstart.md)** — run the self-contained Redis demo.
 - :material-file-cog: **[Configuration](guides/configuration.md)** — the full drill YAML reference.
 - :material-console: **[CLI reference](reference/cli.md)** — every command, flag, and exit code.
 

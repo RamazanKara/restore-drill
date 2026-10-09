@@ -1,6 +1,6 @@
 # Installation
 
-`restore-drill` is a single static binary. Install it however suits your
+`restore-drill` is a Go command-line tool. Install it however suits your
 environment, then verify it runs with `restore-drill version`.
 
 ## go install
@@ -9,9 +9,12 @@ environment, then verify it runs with `restore-drill version`.
 go install github.com/RamazanKara/restore-drill/cmd/restore-drill@latest
 ```
 
+This source install reports `dev` in `restore-drill version`. Release binaries
+and `make build` embed version metadata.
+
 ## Container image
 
-Release images are published to GitHub Container Registry:
+The release workflow targets GitHub Container Registry:
 
 ```bash
 docker pull ghcr.io/ramazankara/restore-drill:latest
@@ -29,8 +32,8 @@ make build      # produces ./bin/restore-drill
 
 ## Verify release signatures
 
-Release images and checksum artifacts are signed with keyless Sigstore/Cosign
-from GitHub Actions. After installing [cosign](https://docs.sigstore.dev/), verify
+The release workflow includes keyless Sigstore/Cosign signing.
+After installing [cosign](https://docs.sigstore.dev/), verify
 the container image:
 
 ```bash
@@ -40,16 +43,19 @@ cosign verify \
   ghcr.io/ramazankara/restore-drill:latest
 ```
 
-Checksums are published with a cosign bundle (`checksums.txt.bundle`) and a
-build-provenance attestation on every release.
+The workflow also generates a checksum bundle (`checksums.txt.bundle`) and
+build-provenance attestation. Verify the artifacts for the release you use.
 
 ## Requirements
 
+- Source builds require the Go version in `go.mod` or newer. Make targets need
+  GNU Make and a POSIX shell; race tests also need a C compiler.
 - A container runtime: **Docker** (local/CI) or **Kubernetes** (Helm chart).
-- Each drill's **restore target image** must contain the database runtime, its
-  client tools, and the selected backup tool. Local/S3 staging also needs `tar`
-  in that image. `restore-drill doctor` and preflight checks report missing
-  commands early.
+- Each drill's **restore target image** must contain the database runtime and
+  the tools needed for the selected restore flow. Local/S3 staging also needs `tar`
+  in that image. Provider preflight checks inspect tools after creating the
+  target; `doctor` checks local configuration, runtime access, paths, and local
+  development tools without starting a restore target.
 
 ## See also
 

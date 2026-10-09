@@ -191,23 +191,26 @@ func addFileToTar(tw *tar.Writer, path, name string, info os.FileInfo) error {
 	return nil
 }
 
-func removeTemp(path string) {
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-		slog.Warn("failed to remove temporary backup file", "path", path, "error", err)
-	}
-}
-
 func stageS3(ctx context.Context, rt engine.Runtime, target engine.Container, repo config.RepoConfig) (*StagedBackup, error) {
 	if repo.Bucket == "" {
 		return nil, errors.New("s3 repo bucket must be configured")
 	}
 
-	tmp, err := os.CreateTemp("", "restore-drill-s3-*")
+	dir, err := os.MkdirTemp("", "restore-drill-s3-*")
+	if err != nil {
+		return nil, fmt.Errorf("create temporary backup directory: %w", err)
+	}
+	defer func() {
+		if err := os.RemoveAll(dir); err != nil {
+			slog.Warn("failed to remove temporary backup directory", "path", dir, "error", err)
+		}
+	}()
+
+	tmp, err := os.CreateTemp(dir, "download-*")
 	if err != nil {
 		return nil, fmt.Errorf("create temporary backup file: %w", err)
 	}
 	tmpPath := tmp.Name()
-	defer func() { removeTemp(tmpPath) }()
 
 	key, err := downloadS3(ctx, repo, tmp)
 	closeErr := tmp.Close()

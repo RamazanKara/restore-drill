@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/RamazanKara/restore-drill/internal/engine"
 	cerrdefs "github.com/containerd/errdefs"
@@ -102,17 +103,24 @@ func (r *Runtime) Create(ctx context.Context, spec engine.ContainerSpec) (engine
 	if err != nil {
 		return nil, fmt.Errorf("docker: create container: %w", err)
 	}
+	ready := false
+	defer func() {
+		if !ready {
+			cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+			defer cancel()
+			if err := r.client.ContainerRemove(cleanupCtx, resp.ID, dockercontainer.RemoveOptions{Force: true}); err != nil {
+				slog.Error("failed to remove unready container", "id", resp.ID, "error", err)
+			}
+		}
+	}()
 
 	if err := r.client.ContainerStart(ctx, resp.ID, dockercontainer.StartOptions{}); err != nil {
-		// Cleanup on failure
-		_ = r.client.ContainerRemove(ctx, resp.ID, dockercontainer.RemoveOptions{Force: true})
 		return nil, fmt.Errorf("docker: start container: %w", err)
 	}
 
 	// Inspect to get port mappings
 	inspect, err := r.client.ContainerInspect(ctx, resp.ID)
 	if err != nil {
-		_ = r.client.ContainerRemove(ctx, resp.ID, dockercontainer.RemoveOptions{Force: true})
 		return nil, fmt.Errorf("docker: inspect container: %w", err)
 	}
 
@@ -133,6 +141,7 @@ func (r *Runtime) Create(ctx context.Context, spec engine.ContainerSpec) (engine
 	}
 
 	slog.Info("container started", "id", dc.id, "ports", portMap)
+	ready = true
 	return dc, nil
 }
 

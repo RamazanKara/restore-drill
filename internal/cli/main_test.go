@@ -141,7 +141,9 @@ func TestConfiguredReportPath(t *testing.T) {
 }
 
 func TestWriteConfiguredReportsWritesJSONAndHTML(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	outputDir := t.TempDir()
 	ts := time.Date(2026, 5, 24, 12, 0, 0, 0, time.UTC)
 	results := []engine.DrillResult{

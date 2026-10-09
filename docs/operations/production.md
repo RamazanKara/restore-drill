@@ -83,7 +83,8 @@ Preflight checks fail fast when required commands are missing.
 - Alert when `restore_drill_validation_passed == 0`.
 - Alert when `time() - restore_drill_last_success_timestamp` exceeds the
   expected drill interval.
-- Alert when `restore_drill_backup_age_seconds` exceeds the allowed RPO window.
+- Use freshness checks against application timestamps for RPO evidence;
+  provider-reported backup timestamps do not reliably identify artifact age.
 
 Detailed report file behavior, webhook payloads, metrics, and alert examples are
 in [REPORTING.md](../reference/reporting.md).

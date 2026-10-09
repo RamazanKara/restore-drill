@@ -1,13 +1,15 @@
 # Quick start
 
-This walks you from a clone to a passing drill in a couple of minutes using the
-self-contained Redis demo (no external backups required).
+The Redis demo includes a small backup fixture. It requires a working Docker
+daemon and permission to pull and run `redis:7-alpine`.
 
 ## 1. Build and run the demo
 
 ```bash
 make build
-./bin/restore-drill run --config examples/demo-redis-aof.yaml --runtime docker
+export PATH="$PWD/bin:$PATH"
+restore-drill validate --config examples/demo-redis-aof.yaml
+restore-drill run --config examples/demo-redis-aof.yaml --runtime docker
 ```
 
 The demo restores a tiny Redis AOF backup into a disposable `redis:7-alpine`
@@ -24,7 +26,7 @@ restore-drill doctor --config examples/demo-redis-aof.yaml --runtime docker
 ## 3. Write and validate your own config
 
 Start from an example under [`examples/`](https://github.com/RamazanKara/restore-drill/tree/main/examples),
-adjust it for your backup, then validate before running:
+copy the chosen file to `drill.yaml`, and adjust it for your backup before running:
 
 ```bash
 restore-drill validate --config drill.yaml

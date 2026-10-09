@@ -4,11 +4,9 @@
 
 Backups that are never restored are guesses. `restore-drill` restores real
 backup artifacts into disposable Docker containers or Kubernetes pods, validates
-the restored data, records RTO/RPO evidence, and publishes machine-readable
+the restored data, records restore timing and check evidence, and publishes machine-readable
 results for audits and alerts.
 
-[![CI](https://github.com/RamazanKara/restore-drill/actions/workflows/ci.yml/badge.svg)](https://github.com/RamazanKara/restore-drill/actions)
-[![Go Report Card](https://goreportcard.com/badge/github.com/RamazanKara/restore-drill)](https://goreportcard.com/report/github.com/RamazanKara/restore-drill)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/RamazanKara/restore-drill)](https://github.com/RamazanKara/restore-drill/releases)
 
@@ -44,11 +42,11 @@ inventory infrastructure, or replace observability platforms.
 | Alert filtering | `on: always` (default) or `on: failure` per alert |
 | Kubernetes | Helm CronJob, namespace-scoped RBAC, restore pod labels/annotations, image pull secrets, resources, NetworkPolicy |
 
-Provider restore images must include the database runtime, client tools, and the
-selected backup tool. Local/S3 staging also requires `tar` in the restore target
+Provider restore images must include the database runtime and the tools needed
+for the selected restore flow. Local/S3 staging also requires `tar` in the restore target
 image. Preflight checks fail early when required commands are missing.
 
-Future candidates are tracked in [docs/ROADMAP.md](docs/project/roadmap.md). Cost
+Future candidates are tracked in [the roadmap](docs/project/roadmap.md). Cost
 estimation is a non-goal.
 
 ## Install
@@ -57,14 +55,14 @@ estimation is a non-goal.
 go install github.com/RamazanKara/restore-drill/cmd/restore-drill@latest
 ```
 
-Release binaries and container images are published from tags:
+The tag-triggered release workflow builds binaries and container images:
 
 ```bash
 docker pull ghcr.io/ramazankara/restore-drill:latest
 ```
 
-Release images and checksum artifacts are signed with keyless Sigstore/Cosign
-from GitHub Actions. After installing `cosign`, verify the container image:
+The release workflow includes keyless Sigstore/Cosign signing. After installing
+`cosign`, verify the published container image:
 
 ```bash
 cosign verify \
@@ -79,14 +77,17 @@ Run the self-contained Redis demo from a clone:
 
 ```bash
 make build
-./bin/restore-drill run --config examples/demo-redis-aof.yaml --runtime docker
+export PATH="$PWD/bin:$PATH"
+restore-drill validate --config examples/demo-redis-aof.yaml
+restore-drill run --config examples/demo-redis-aof.yaml --runtime docker
 ```
 
-Then validate and run your own drill config:
+For your own drill, copy an example to `drill.yaml` and adjust its backup paths,
+image, and checks before running:
 
 ```bash
 restore-drill doctor --config examples/demo-redis-aof.yaml --runtime docker
-restore-drill validate --config examples/drill.yaml
+restore-drill validate --config drill.yaml
 restore-drill run --config drill.yaml --runtime docker
 restore-drill run --config drill.yaml --runtime docker --parallel --format json
 restore-drill status
@@ -173,7 +174,7 @@ Full documentation is published at
 - Operations: [Production rollout](docs/operations/production.md) · [State & history](docs/operations/state.md)
 - Project: [Roadmap](docs/project/roadmap.md) · [Support policy](docs/project/support.md) · [Release process](docs/project/release.md)
 
-## Production readiness in 10 minutes
+## Before production use
 
 1. Run `restore-drill doctor --config drill.yaml --runtime docker` or
    `--runtime kubernetes`.
@@ -183,6 +184,11 @@ Full documentation is published at
 5. Enable Pushgateway metrics and alert on failed validation plus stale success.
 
 ## Development
+
+Use the Go version in `go.mod` or newer, GNU Make, a POSIX shell, a C compiler
+for race tests, and golangci-lint (the version pinned in `.github/workflows/ci.yml`).
+On Windows, the Make targets can run in WSL Ubuntu with these tools installed.
+Docker or a Kubernetes cluster is needed for actual restore drills.
 
 ```bash
 make build
@@ -198,6 +204,11 @@ make check-examples
 ```bash
 make test-integration
 ```
+
+CI contains lint, race-enabled unit tests, and build on pushes to `main` and
+manual dispatch. GitHub Actions is currently unavailable due to billing; run
+the Make targets locally as the gate. Release and documentation deployment
+workflows remain configured separately.
 
 ## License
 

@@ -15,8 +15,8 @@ Config YAML
   -> CLI command
   -> Drill engine
   -> Runtime adapter: Docker or Kubernetes
-  -> Provider: PostgreSQL, MySQL/MariaDB, Redis
-  -> Reporter: stdout, JSON, webhook, local history, Prometheus Pushgateway
+  -> Provider: PostgreSQL, MySQL/MariaDB, Redis, etcd
+  -> Outputs: stdout, JSON/HTML, webhook/Slack, local history, Prometheus Pushgateway
 ```
 
 For each drill, the engine:
@@ -37,7 +37,7 @@ concurrently while preserving result slots for reporting.
 
 The important boundary is that the engine owns orchestration and evidence, while
 providers own database-specific restore and validation behavior. Runtime adapters
-only know how to create, execute in, copy to, log, and destroy disposable
+only know how to create, execute in, copy to, and destroy disposable
 targets.
 
 ## Engine interfaces
@@ -47,13 +47,13 @@ Providers implement tool-specific restore and validation:
 ```go
 type Provider interface {
     Name() string
-    Restore(ctx context.Context, rt Runtime, cfg BackupConfig, target Container) (*RestoreResult, error)
-    Validate(ctx context.Context, rt Runtime, target Container, checks []Check) (*ValidationResult, error)
+    Restore(ctx context.Context, rt Runtime, cfg config.BackupConfig, target Container) (*RestoreResult, error)
+    Validate(ctx context.Context, rt Runtime, target Container, checks []config.Check) (*ValidationResult, error)
     Cleanup(ctx context.Context, target Container) error
 }
 
 type PreflightProvider interface {
-    Preflight(ctx context.Context, rt Runtime, cfg BackupConfig, target Container, checks []Check) error
+    Preflight(ctx context.Context, rt Runtime, cfg config.BackupConfig, target Container, checks []config.Check) error
 }
 ```
 
@@ -80,7 +80,7 @@ and delete APIs. Helm schedules the CLI as a CronJob and passes
 
 ## Backup staging
 
-`pkg/backup.Stage` resolves backup input into a path inside the restore target:
+`internal/backup.Stage` resolves backup input into a path inside the restore target:
 
 - existing local host files and directories are tar-copied into
   `/tmp/restore-drill-backups`

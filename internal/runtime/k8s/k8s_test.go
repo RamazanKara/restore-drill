@@ -2,7 +2,12 @@ package k8s
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/RamazanKara/restore-drill/internal/engine"
@@ -10,9 +15,81 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/rest"
 	ktesting "k8s.io/client-go/testing"
 )
+
+func TestCreateCleansUpUnreadyPods(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		wantErr string
+	}{
+		{name: "terminal phase", wantErr: "terminal phase"},
+		{name: "refetch fails", wantErr: "get pod"},
+		{name: "canceled", wantErr: "context canceled"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			var gets, deletes atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				if !strings.HasPrefix(r.URL.Path, "/api/v1/namespaces/restore-drill/pods") {
+					t.Errorf("unexpected path: %s", r.URL.Path)
+				}
+				switch r.Method {
+				case http.MethodPost:
+					var pod corev1.Pod
+					if err := json.NewDecoder(r.Body).Decode(&pod); err != nil {
+						t.Errorf("decode pod: %v", err)
+					}
+					w.WriteHeader(http.StatusCreated)
+					_ = json.NewEncoder(w).Encode(pod)
+				case http.MethodGet:
+					count := gets.Add(1)
+					if tt.name == "canceled" {
+						cancel()
+						<-r.Context().Done()
+						return
+					}
+					if tt.name == "refetch fails" && count == 2 {
+						w.WriteHeader(http.StatusForbidden)
+						_ = json.NewEncoder(w).Encode(metav1.Status{Status: "Failure", Message: "access denied", Code: 403})
+						return
+					}
+					phase := corev1.PodRunning
+					if tt.name == "terminal phase" {
+						phase = corev1.PodFailed
+					}
+					_ = json.NewEncoder(w).Encode(corev1.Pod{Status: corev1.PodStatus{Phase: phase}})
+				case http.MethodDelete:
+					deletes.Add(1)
+					_ = json.NewEncoder(w).Encode(metav1.Status{Status: "Success"})
+				default:
+					t.Errorf("unexpected method: %s", r.Method)
+				}
+			}))
+			defer server.Close()
+			client, err := kubernetes.NewForConfig(&rest.Config{
+				Host:          server.URL,
+				ContentConfig: rest.ContentConfig{ContentType: "application/json"},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			rt := &Runtime{client: client, namespace: "restore-drill"}
+			_, err = rt.Create(ctx, engine.ContainerSpec{Image: "redis:7-alpine"})
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("expected %q, got %v", tt.wantErr, err)
+			}
+			if deletes.Load() != 1 {
+				t.Fatalf("expected unready pod to be deleted once, got %d", deletes.Load())
+			}
+		})
+	}
+}
 
 func TestDestroyUsesPodNamespace(t *testing.T) {
 	ctx := context.Background()

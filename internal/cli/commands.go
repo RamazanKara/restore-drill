@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -88,9 +89,6 @@ func runCmd() *cobra.Command {
 			} else {
 				results, err = eng.Run(cmd.Context(), cfg.Drills)
 			}
-			if err != nil {
-				return err
-			}
 
 			currentRun := saveState(results)
 
@@ -113,12 +111,9 @@ func runCmd() *cobra.Command {
 				}
 			}
 			if failed {
-				return fmt.Errorf("one or more drills failed")
+				return errors.Join(err, reportErr, fmt.Errorf("one or more drills failed"))
 			}
-			if reportErr != nil {
-				return reportErr
-			}
-			return nil
+			return errors.Join(err, reportErr)
 		},
 	}
 

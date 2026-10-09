@@ -31,9 +31,11 @@ Include:
 
 ## Vulnerability scanning
 
-CI and the scheduled Security workflow run `make vuln`, which executes govulncheck through
-`scripts/govulncheck.sh`. Fixable Go standard-library and module
-vulnerabilities fail the build.
+Run `make vuln` locally before release. It uses an installed `govulncheck`, or
+downloads it through `go run` when absent. The CI workflow runs lint, unit
+tests, and build; it does not run a vulnerability scan. GitHub Actions is
+currently unavailable due to billing. Fixable Go standard-library and module
+vulnerabilities fail the local gate.
 
 The only allowed findings are reviewed no-fixed-version Docker/Moby advisories
 listed in `.govulncheck.allowlist`. Each entry has an expiry date and must be

@@ -50,7 +50,8 @@ When a single format is enabled and `output` has a file extension, restore-drill
 - `table`: accepted for stdout compatibility; it does not create a file
 
 `retention` defaults to `90d`. It accepts day counts like `30d` and Go
-durations like `720h`.
+durations like `720h`. It selects the HTML history window; it does not delete
+history or report files.
 
 ## JSON compatibility
 
@@ -186,13 +187,19 @@ restore_drill_validation_passed == 0
 time() - restore_drill_last_success_timestamp > 93600
 ```
 
-```promql
-restore_drill_backup_age_seconds > 86400
-```
+`backup_timestamp` and `restore_drill_backup_age_seconds` reflect the timestamp
+returned by the provider. PostgreSQL currently returns server startup time;
+Redis RDB returns `LASTSAVE`. These do not establish the source artifact's age
+or prove RPO. Use data freshness checks against known application timestamps.
 
 The Pushgateway write replaces the current restore-drill grouping on every run,
 so repeated CronJob executions publish current-run values instead of
 accumulating stale counters.
+
+`restore_drill_last_success_timestamp` is emitted only for successful drills in
+the current push. A failed run removes it, so the stale-success expression above
+must be used alongside the failure alert. Detect missing jobs separately in
+your scheduler or monitoring system.
 
 ## See also
 

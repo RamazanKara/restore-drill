@@ -179,12 +179,15 @@ func (e *Engine) executeDrill(ctx context.Context, drill config.DrillConfig) (re
 			slog.Info("keeping container (--no-cleanup)", "id", container.ID())
 			return
 		}
-		if cleanupErr := provider.Cleanup(ctx, container); cleanupErr != nil {
+		// A timed-out drill still needs a chance to remove its target.
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+		defer cleanupCancel()
+		if cleanupErr := provider.Cleanup(cleanupCtx, container); cleanupErr != nil {
 			slog.Error("provider cleanup failed", "id", container.ID(), "error", cleanupErr)
 			result.Error = joinResultError(result.Error, "cleanup provider", cleanupErr)
 		}
 		slog.Info("destroying container", "id", container.ID())
-		if err := e.runtime.Destroy(ctx, container); err != nil {
+		if err := e.runtime.Destroy(cleanupCtx, container); err != nil {
 			slog.Error("failed to destroy container", "id", container.ID(), "error", err)
 			result.Error = joinResultError(result.Error, "destroy target", err)
 		}

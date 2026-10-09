@@ -32,9 +32,10 @@ the report contents and JSON contract.
 
 ## Retention
 
-The `reporting.retention` config field (e.g. `90d`) governs how long configured
-report files and history are kept. Choose a window that satisfies your audit
-requirements.
+The `reporting.retention` config field (e.g. `90d`) selects the history window
+included in configured HTML reports. It does not delete history or report
+files. The `report --last N` flag selects a separate window for ad hoc reports.
+Manage file deletion and archival outside restore-drill.
 
 ## Persisting evidence for audits
 

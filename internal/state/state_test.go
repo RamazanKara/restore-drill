@@ -41,6 +41,7 @@ func TestSaveAtomicallyReplacesInvalidState(t *testing.T) {
 func TestAppendHistoryConcurrentSameTimestampKeepsEveryRun(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 
 	const runs = 32
 	ts := time.Date(2026, 5, 20, 14, 30, 0, 123, time.UTC)
@@ -92,6 +93,7 @@ func TestAppendHistoryConcurrentSameTimestampKeepsEveryRun(t *testing.T) {
 func TestLoadHistorySkipsMalformedEntriesAndSortsRuns(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 
 	dir := HistoryDir()
 	if err := os.MkdirAll(dir, 0o700); err != nil {
