@@ -23,7 +23,7 @@ The recording runs a real Redis AOF restore in Docker and is generated from
 2. Stages local or S3-compatible backup artifacts when needed.
 3. Runs the configured provider restore flow.
 4. Executes validation checks against restored data.
-5. Writes local history, JSON/HTML evidence, webhooks, and Prometheus
+5. Writes local history, JSON/HTML/Markdown evidence, webhooks, and Prometheus
    Pushgateway metrics.
 
 restore-drill is intentionally focused on one job: proving that backups can be
@@ -38,7 +38,7 @@ inventory infrastructure, or replace observability platforms.
 | Backup tools | `pg_dump`, `pg_restore`, `pgbackrest`, `wal-g`/`walg`, `mysqldump`, `xtrabackup`, `mariabackup`, Redis RDB, Redis AOF, etcd snapshot |
 | Backup sources | Local files/directories, mounted target paths, S3-compatible objects and prefixes |
 | Runtimes | Docker and Kubernetes |
-| Outputs | stdout table, run JSON, HTML evidence reports, webhooks, Slack/Mattermost alerts, local history, Prometheus Pushgateway |
+| Outputs | stdout table, run JSON/Markdown, HTML/Markdown evidence reports, webhooks, Slack/Mattermost alerts, local history, Prometheus Pushgateway |
 | Alert filtering | `on: always` (default) or `on: failure` per alert |
 | Kubernetes | Helm CronJob, namespace-scoped RBAC, restore pod labels/annotations, image pull secrets, resources, NetworkPolicy |
 
@@ -55,14 +55,14 @@ estimation is a non-goal.
 go install github.com/RamazanKara/restore-drill/cmd/restore-drill@latest
 ```
 
-The tag-triggered release workflow builds binaries and container images:
+Published container images are available from GHCR:
 
 ```bash
 docker pull ghcr.io/ramazankara/restore-drill:latest
 ```
 
-The release workflow includes keyless Sigstore/Cosign signing. After installing
-`cosign`, verify the published container image:
+For existing images signed by the former release workflow, install `cosign`
+and verify the published container image:
 
 ```bash
 cosign verify \
@@ -92,7 +92,19 @@ restore-drill run --config drill.yaml --runtime docker
 restore-drill run --config drill.yaml --runtime docker --parallel --format json
 restore-drill status
 restore-drill report --last 90 --output restore-evidence.html
+restore-drill report --last 30 --format markdown --output restore-evidence.md
 ```
+
+Rerun selected drills from a shared config without editing it:
+
+```bash
+restore-drill run --config examples/multi-drill.yaml --drill redis-sessions --format markdown
+```
+
+Repeat `--drill NAME` to select several drills. Names are exact and selection
+preserves config order; unknown names fail before runtime setup. `validate` reports the config
+filename, source line, and field path for semantic errors. See the
+[CLI reference](docs/reference/cli.md) and [report formats](docs/reference/reporting.md).
 
 Incident mode keeps the restore target available for inspection:
 
@@ -185,15 +197,19 @@ Full documentation is published at
 
 ## Development
 
-Use the Go version in `go.mod` or newer, GNU Make, a POSIX shell, a C compiler
-for race tests, and golangci-lint (the version pinned in `.github/workflows/ci.yml`).
-On Windows, the Make targets can run in WSL Ubuntu with these tools installed.
+Use the Go version in `go.mod` or newer, GNU Make, a POSIX shell, staticcheck,
+and golangci-lint (versions are pinned in `.github/workflows/ci.yml`).
+Race tests run when `go env CGO_ENABLED` is `1` and require a C compiler;
+otherwise tests run without `-race`. On Windows, use GNU Make with Git Bash on
+`PATH`, or WSL Ubuntu. Native Windows builds produce `bin/restore-drill.exe`.
 Docker or a Kubernetes cluster is needed for actual restore drills.
 
 ```bash
 make build
+make fmt-check vet
 make test-unit
-make lint
+make test-fuzz
+make lint staticcheck
 make vuln
 make check-examples
 ```
@@ -205,10 +221,13 @@ make check-examples
 make test-integration
 ```
 
-CI contains lint, race-enabled unit tests, and build on pushes to `main` and
-manual dispatch. GitHub Actions is currently unavailable due to billing; run
-the Make targets locally as the gate. Release and documentation deployment
-workflows remain configured separately.
+One CI workflow runs the local verification targets on pushes to `main` and
+manual dispatch. GitHub Actions is currently unavailable due to billing; local
+checks are the gate. Build documentation locally with `make docs`.
+
+`make local-release VERSION=vX.Y.Z` builds a native binary under `dist/` with
+version metadata and `SHA256SUMS`, without publishing. See the
+[local release instructions](docs/project/release.md).
 
 ## License
 

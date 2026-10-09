@@ -33,6 +33,7 @@ func runCmd() *cobra.Command {
 	var kubePodLabels []string
 	var kubePodAnnotations []string
 	var kubeImagePullSecrets []string
+	var drillNames []string
 
 	cmd := &cobra.Command{
 		Use:   "run",
@@ -41,6 +42,10 @@ func runCmd() *cobra.Command {
 			cfg, err := config.LoadConfig(configPath)
 			if err != nil {
 				return fmt.Errorf("load config: %w", err)
+			}
+			cfg.Drills, err = selectDrills(cfg.Drills, drillNames)
+			if err != nil {
+				return err
 			}
 
 			if target != "" {
@@ -118,7 +123,8 @@ func runCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&configPath, "config", "c", "drill.yaml", "Path to drill configuration file")
-	cmd.Flags().StringVar(&format, "format", "table", "Output format: table, json")
+	cmd.Flags().StringArrayVar(&drillNames, "drill", nil, "Run only the named drill (repeatable; default: all drills)")
+	cmd.Flags().StringVar(&format, "format", "table", "Output format: table, json, markdown")
 	cmd.Flags().BoolVar(&parallel, "parallel", false, "Run drills concurrently")
 	cmd.Flags().BoolVar(&noCleanup, "no-cleanup", false, "Keep containers running after drill (for debugging)")
 	cmd.Flags().StringVar(&target, "target", "", "PITR target timestamp (e.g. 2024-01-15T10:30:00Z) for incident recovery mode")
@@ -228,6 +234,8 @@ func reportCmd() *cobra.Command {
 			switch format {
 			case "json":
 				renderErr = reporter.RenderJSON(w, report)
+			case "markdown":
+				renderErr = reporter.RenderMarkdown(w, report)
 			default:
 				renderErr = reporter.RenderHTML(w, report)
 			}
@@ -240,7 +248,7 @@ func reportCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&format, "format", "html", "Report format: html, json")
+	cmd.Flags().StringVar(&format, "format", "html", "Report format: html, json, markdown")
 	cmd.Flags().IntVar(&days, "last", 90, "Include drills from the last N days")
 	cmd.Flags().StringVarP(&output, "output", "o", "", "Output file (default: stdout)")
 

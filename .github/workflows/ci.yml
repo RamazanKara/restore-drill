@@ -34,8 +34,10 @@ jobs:
           version: v2.12.2
           args: --concurrency=2
 
-      - name: Unit tests
-        run: make -j2 test-unit
+      - name: Install check tools
+        run: |
+          go install honnef.co/go/tools/cmd/staticcheck@v0.8.1
+          go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
 
-      - name: Build
-        run: make -j2 build
+      - name: Local verification targets
+        run: make build fmt-check vet test-unit staticcheck vuln check-examples

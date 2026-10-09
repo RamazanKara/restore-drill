@@ -14,6 +14,14 @@ versioning.
 
 ### Added
 
+- Added repeatable `run --drill NAME` selection, preserving config order and
+  rejecting unknown names before runtime setup.
+- Added `run/report --format markdown` and configured Markdown evidence files,
+  with escaped check evidence, failures, and retained-target details.
+- Added filenames, source lines, and field paths to semantic config errors,
+  including YAML aliases, merge keys, and multiline environment substitutions.
+- Added table-driven feature tests, parser/output fuzz targets, and
+  `make local-release` for a native binary with `SHA256SUMS`.
 - Published a documentation site (MkDocs Material, deployed to GitHub Pages) with
   a reorganized `docs/` tree (getting-started / guides / reference / operations /
   project) and new CLI reference, troubleshooting, incident-response, and
@@ -21,6 +29,10 @@ versioning.
 
 ### Changed
 
+- Kept one verification workflow; release and documentation preparation now run
+  locally while Actions is unavailable. Make tests use `-race` only with CGO
+  enabled, and native Windows builds use the `.exe` suffix. Go and shell sources
+  use LF checkouts so formatting and shell checks work with Windows Git.
 - Restructured the Go source under `internal/` — a dedicated `internal/cli`
   wiring layer (thin `main`) and a `config` package split out of `engine`. This
   is internal only: the `go install` path and all CLI, config, JSON, metrics, and

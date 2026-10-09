@@ -154,7 +154,7 @@
       "properties": {
         "format": {
           "type": "array",
-          "items": { "type": "string", "enum": ["table", "json", "html"] }
+          "items": { "type": "string", "enum": ["table", "json", "html", "markdown"] }
         },
         "output": { "type": "string" },
         "retention": { "type": "string" }

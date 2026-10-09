@@ -22,6 +22,8 @@ func buildReporter(format string, cfg *config.Config, out io.Writer) engine.Repo
 	switch format {
 	case "json":
 		reporters = append(reporters, &reporter.JSON{Writer: out, Pretty: true})
+	case "markdown":
+		reporters = append(reporters, &reporter.Markdown{Writer: out})
 	default:
 		reporters = append(reporters, &reporter.Stdout{Writer: out})
 	}
@@ -171,7 +173,7 @@ func writeConfiguredReports(ctx context.Context, cfg config.ReportConfig, result
 			switch format {
 			case "json":
 				return (&reporter.JSON{Writer: w, Pretty: true}).Report(ctx, results)
-			case "html":
+			case "html", "markdown":
 				runs, err := state.LoadHistory(since)
 				if err != nil {
 					return err
@@ -179,7 +181,11 @@ func writeConfiguredReports(ctx context.Context, cfg config.ReportConfig, result
 				if len(runs) == 0 {
 					runs = []*state.LastRun{currentRun}
 				}
-				return reporter.RenderHTML(w, reporter.BuildEvidenceReport(runs, since))
+				report := reporter.BuildEvidenceReport(runs, since)
+				if format == "markdown" {
+					return reporter.RenderMarkdown(w, report)
+				}
+				return reporter.RenderHTML(w, report)
 			default:
 				return nil
 			}
@@ -196,7 +202,7 @@ func configuredFileReportFormats(formats []string) []string {
 	fileFormats := make([]string, 0, len(formats))
 	for _, format := range formats {
 		switch format {
-		case "json", "html":
+		case "json", "html", "markdown":
 			if _, ok := seen[format]; ok {
 				continue
 			}
@@ -233,6 +239,8 @@ func configuredReportFilename(format, timestamp string) string {
 	switch format {
 	case "html":
 		return "restore-drill-compliance-" + timestamp + ".html"
+	case "markdown":
+		return "restore-drill-evidence-" + timestamp + ".md"
 	default:
 		return "restore-drill-run-" + timestamp + ".json"
 	}

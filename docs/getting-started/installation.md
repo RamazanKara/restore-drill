@@ -14,7 +14,7 @@ and `make build` embed version metadata.
 
 ## Container image
 
-The release workflow targets GitHub Container Registry:
+Published images are hosted in GitHub Container Registry:
 
 ```bash
 docker pull ghcr.io/ramazankara/restore-drill:latest
@@ -30,9 +30,13 @@ cd restore-drill
 make build      # produces ./bin/restore-drill
 ```
 
+Native Windows builds produce `bin/restore-drill.exe`. For a local binary and
+`SHA256SUMS`, run `make local-release` as described in the
+[release instructions](../project/release.md).
+
 ## Verify release signatures
 
-The release workflow includes keyless Sigstore/Cosign signing.
+Existing releases signed by the former workflow use keyless Sigstore/Cosign signing.
 After installing [cosign](https://docs.sigstore.dev/), verify
 the container image:
 
@@ -43,7 +47,7 @@ cosign verify \
   ghcr.io/ramazankara/restore-drill:latest
 ```
 
-The workflow also generates a checksum bundle (`checksums.txt.bundle`) and
+Those releases may also include a checksum bundle (`checksums.txt.bundle`) and
 build-provenance attestation. Verify the artifacts for the release you use.
 
 ## Requirements

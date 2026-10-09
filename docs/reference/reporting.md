@@ -4,7 +4,7 @@ restore-drill writes operational evidence in four places:
 
 - stdout from `restore-drill run`
 - local state and history under `~/.restore-drill`
-- optional configured JSON/HTML report files
+- optional configured JSON/HTML/Markdown report files
 - optional webhooks and Prometheus Pushgateway metrics
 
 Use the outputs together rather than treating one format as the source of
@@ -15,6 +15,7 @@ truth:
 | Human operator watching a manual drill | stdout table |
 | CI gate or audit pipeline | run JSON |
 | Periodic review by humans | HTML evidence report |
+| Tickets, review notes, or CI summaries | Markdown report |
 | Machine-to-machine notification | webhook |
 | Slack/Mattermost channel | slack alert |
 | SLO/RPO alerting | Pushgateway metrics |
@@ -38,6 +39,7 @@ automation:
 
 - `restore-drill-run-20260524T120000Z.json`
 - `restore-drill-compliance-20260524T120000Z.html`
+- `restore-drill-evidence-20260524T120000Z.md` (when `markdown` is enabled)
 
 When a single format is enabled and `output` has a file extension, restore-drill writes that exact path.
 
@@ -47,10 +49,11 @@ When a single format is enabled and `output` has a file extension, restore-drill
   `restore-drill run --format json`
 - `html`: a restore evidence report generated from local history for the configured
   retention window
+- `markdown`: a Markdown evidence report over the same history window as HTML
 - `table`: accepted for stdout compatibility; it does not create a file
 
 `retention` defaults to `90d`. It accepts day counts like `30d` and Go
-durations like `720h`. It selects the HTML history window; it does not delete
+durations like `720h`. It selects the HTML/Markdown history window; it does not delete
 history or report files.
 
 ## JSON compatibility
@@ -107,6 +110,21 @@ Use the explicit report command when you want an ad hoc report for a different w
 restore-drill report --last 90 --output restore-evidence.html
 restore-drill report --format json --last 30
 ```
+
+## Markdown reports
+
+```bash
+restore-drill run --config drill.yaml --format markdown > drill-run.md
+restore-drill report --last 30 --format markdown --output restore-evidence.md
+```
+
+`run --format markdown` contains only the current run: drill status, timing,
+check evidence, errors, known backup timestamps, and retained-target details.
+`report --format markdown` and configured `reporting.format: [markdown]` aggregate
+history, with totals, success rates, RTO, evidence checks, per-check failures,
+and drill summaries sorted by name. Output supports GitHub-style tables; data
+containing Markdown syntax, HTML, pipes, and newlines is escaped to preserve the
+report structure. Existing JSON and HTML contracts are unchanged.
 
 ## Webhooks
 

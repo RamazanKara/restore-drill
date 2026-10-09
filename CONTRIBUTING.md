@@ -7,21 +7,24 @@ documentation beat clever surprises.
 ## Development
 
 Install the Go version required by `go.mod`, GNU Make, a POSIX shell, a C
-compiler for `-race`, and the golangci-lint version pinned in
+compiler when CGO is enabled, and the golangci-lint/staticcheck versions pinned in
 `.github/workflows/ci.yml`. Use WSL Ubuntu for Linux-only checks on Windows.
 
 ```bash
 git clone https://github.com/RamazanKara/restore-drill.git
 cd restore-drill
 make build
+make fmt-check vet
 make test-unit
-make lint
+make test-fuzz
+make lint staticcheck
 make vuln
 ```
 
 GitHub Actions is currently unavailable due to billing. Run these targets
-locally before submitting changes; the CI workflow contains only lint, unit
-tests, and build. `make cover` writes `coverage.out` and `coverage.html` locally.
+locally before submitting changes; one CI workflow runs the same core checks.
+`make cover` writes `coverage.out` and `coverage.html` locally. Tests skip `-race`
+when `go env CGO_ENABLED` is `0`.
 
 Use `make verify` before opening a pull request when Helm and GoReleaser are
 installed locally. For provider or runtime changes, also run the relevant

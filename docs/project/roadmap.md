@@ -35,7 +35,7 @@ It intentionally does not:
 - Container image: `ghcr.io/ramazankara/restore-drill`
 - Supported providers: PostgreSQL, MySQL/MariaDB, Redis, etcd
 - Supported runtimes: Docker and Kubernetes
-- Supported outputs: stdout table, run JSON, HTML evidence report, webhook,
+- Supported outputs: stdout table, run JSON/Markdown, HTML/Markdown evidence report, webhook,
   Slack/Mattermost alerts, local history, Prometheus Pushgateway
 
 The public contracts that must remain compatible within v1 are documented in
@@ -63,6 +63,10 @@ checks.
 
 ## Already Hardened
 
+- Added selective drill execution with repeatable `--drill` names for targeted reruns.
+- Added Markdown run and history reports for review notes and CI summaries.
+- Added config field paths and original source lines to semantic errors, with
+  parser fuzz coverage and support for YAML aliases and merge keys.
 - Standardized project identity on `github.com/RamazanKara/restore-drill` and
   `ghcr.io/ramazankara/restore-drill`.
 - Added explicit Docker/Kubernetes runtime selection.

@@ -8,6 +8,23 @@ The v1 machine-readable schema is available at
 captures the documented wire shape; the Go validator remains the source of
 truth for provider/tool/check compatibility.
 
+## Diagnostics
+
+Semantic validation errors include the config filename, source line, and a field
+path with zero-based list indexes, for example:
+
+```text
+drill.yaml: line 13 (drills[0].checks[0].type): config: drill "redis" check "ping" has unknown type "qurey"
+```
+
+Missing fields point to the closest existing containing node. YAML merge keys and
+aliases remain supported; inherited fields point to their definition, and a
+scalar alias points to its use. Semantic line numbers refer to the original file
+even when environment values contain newlines; errors in inserted content point
+to the placeholder line. YAML syntax and type errors retain the parser's line
+information after environment interpolation. Existing validation rules and
+`${VAR}` / `${VAR:-default}` behavior are unchanged.
+
 If you want a runnable config before reading the whole reference, start with
 [examples/demo-redis-aof.yaml](https://github.com/RamazanKara/restore-drill/blob/main/examples/demo-redis-aof.yaml). It restores a
 small Redis AOF fixture in Docker and exercises the same config shape used for
@@ -131,7 +148,7 @@ restore:
 ```
 
 `target` is passed to PITR-capable providers. The `--target` CLI flag overrides
-`restore.target` for every drill in the config.
+`restore.target` for every selected drill.
 
 `timeout` is a Go duration. If omitted, the drill timeout defaults to 10
 minutes.
@@ -253,10 +270,13 @@ each run:
 - `json`: current run result array, using the same shape as `--format json`
 - `html`: restore evidence report generated from local history for the retention
   window
+- `markdown`: the same history evidence in Markdown, suitable for tickets and CI
+  summaries; use `reporting.format: [json, markdown]` to keep both formats
 - `table`: accepted for stdout compatibility and does not create a file
 
 `retention` defaults to `90d` and accepts day counts such as `30d` or Go
-durations such as `720h`.
+durations such as `720h`. It selects the history window for HTML and Markdown;
+it does not delete history or report files.
 
 See [REPORTING.md](../reference/reporting.md) for output path rules and the JSON
 compatibility policy.
